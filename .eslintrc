@@ -1,0 +1,15 @@
+{
+  "parser": "babel-eslint",
+  "extends": ["standard", "prettier"],
+  "env": {
+    "es6": true,
+    "node": true,
+    "mocha": true
+  },
+  "globals": {
+    "artifacts": "readonly",
+    "contract": "readonly",
+    "assert": "readonly",
+    "web3": "readonly"
+  }
+}

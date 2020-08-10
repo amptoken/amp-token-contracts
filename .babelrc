@@ -1,0 +1,14 @@
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "node": "current",
+          "esmodules": true
+        }
+      }
+    ]
+  ],
+  "plugins": ["transform-class-properties"]
+}
