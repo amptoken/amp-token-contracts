@@ -28,7 +28,7 @@ contract('Amp with', function ([owner]) {
     })
 
     it('returns the default partitions', async function () {
-      const defaultPartition = await this.amp.getDefaultPartition()
+      const defaultPartition = await this.amp.defaultPartition()
 
       assert.equal(defaultPartition, DEFAULT_PARTITION)
     })

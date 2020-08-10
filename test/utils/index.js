@@ -19,3 +19,9 @@ export const assertEqualEvents = (events, wanted) => {
     assertEqualEvent(event, wanted[i].name, wanted[i].values)
   })
 }
+
+export const assertLogsContainEvent = (logs = [], wanted) => {
+  const found = logs.find((log) => log.event === wanted.name)
+  assert.exists(found)
+  assertEqualEvent(found, wanted.name, wanted.values)
+}

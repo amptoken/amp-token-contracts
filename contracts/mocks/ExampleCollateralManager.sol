@@ -5,18 +5,17 @@
     not been audited. Please use for inspiration only.
 */
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "../erc1820/ERC1820Client.sol";
 import "../erc1820/ERC1820Implementer.sol";
-
 
 // Define the methods on Amp that the ExampleCollateralManager contract needs
 // to interact with.
 interface IAmp {
     function balanceOf(address) external returns (uint256);
 
-    function totalBalanceOf(address) external returns (uint256);
+    function balanceOfByPartition(bytes32, address) external returns (uint256);
 
     function registerCollateralManager() external;
 
@@ -24,7 +23,7 @@ interface IAmp {
 
     function authorizeOperatorByPartition(bytes32, address) external;
 
-    function operatorTransferByPartition(
+    function transferByPartition(
         bytes32 _partition,
         address _from,
         address _to,
@@ -33,7 +32,6 @@ interface IAmp {
         bytes calldata _operatorData
     ) external returns (bytes32);
 }
-
 
 // ExampleCollateralManager is used to demostrate common use cases for Amp and
 // collateral managers, including:
@@ -212,12 +210,13 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
             // i.e. if the supplier has included the "claim rewards" flag, they
             // could be requesting the application of some reward to their
             // supplied balance.
-            bytes memory operatorData = _operatorData;
-            bytes32 flag;
-            assembly {
-                flag := mload(add(operatorData, 32))
+
+            bytes2 flag;
+            if (_operatorData.length >= 2) {
+                flag = abi.decode(_operatorData, (bytes2));
             }
-            if (bytes2(flag) == FLAG_CLAIM_REWARDS) {
+
+            if (flag == FLAG_CLAIM_REWARDS) {
                 _execApplyRewards(_from);
             } else {
                 // Or maybe the semantics mean that some event should be created
@@ -279,8 +278,8 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
         // Give the supplier permission to "withdraw"
         amp.authorizeOperatorByPartition(collateralPartition, supplier);
 
-        uint256 holderBalance = amp.totalBalanceOf(supplier);
-        uint256 poolBalance = amp.totalBalanceOf(address(this));
+        uint256 holderBalance = amp.balanceOf(supplier);
+        uint256 poolBalance = amp.balanceOf(address(this));
 
         emit Supply(supplier, _value, holderBalance, poolBalance, _data);
     }
@@ -294,8 +293,8 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
         bytes memory _data,
         bytes memory /* _operatorData */
     ) internal {
-        uint256 holderBalance = amp.totalBalanceOf(_from);
-        uint256 poolBalance = amp.totalBalanceOf(address(this));
+        uint256 holderBalance = amp.balanceOf(_from);
+        uint256 poolBalance = amp.balanceOf(address(this));
 
         _supplyOf[_from] += _value;
 
@@ -303,7 +302,7 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
 
         // Simulate reentry
         if (false && _supplyOf[_from] == _value) {
-            amp.operatorTransferByPartition(0x0, _from, address(this), _value, _data, "");
+            amp.transferByPartition(0x0, _from, address(this), _value, _data, "");
         }
 
         // Give them permission to "withdraw"
@@ -326,12 +325,13 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
             "_execWithdrawal: Supplier does not have enough to withdraw"
         );
 
-        bytes32 proof;
-        assembly {
-            proof := mload(add(_operatorData, 32))
+        bytes2 proof;
+        if (_operatorData.length >= 2) {
+            proof = abi.decode(_operatorData, (bytes2));
         }
+
         // Use data (could come offchain, for example) to gaurd the withdraw
-        require(bytes2(proof) == VALID_DATA, "_execWithdrawal: Invalid data provided");
+        require(proof == VALID_DATA, "_execWithdrawal: Invalid data provided");
 
         _supplyOf[supplier] -= _value;
 
@@ -352,14 +352,9 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
             "_execWithdrawalReentrance: Supplier does not have enough to withdraw"
         );
 
-        bytes32 proof;
-        assembly {
-            proof := mload(add(_operatorData, 32))
-        }
-        require(
-            bytes2(proof) == VALID_DATA,
-            "_execWithdrawalReentrance: Invalid data provided"
-        );
+        bytes2 proof = abi.decode(_operatorData, (bytes2));
+
+        require(proof == VALID_DATA, "_execWithdrawalReentrance: Invalid data provided");
 
         _supplyOf[supplier] -= _value;
 
@@ -368,7 +363,7 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
         if (_rewardsOf[supplier] > 0) {
             uint256 rewards = _rewardsOf[supplier];
             _execApplyRewards(supplier);
-            amp.operatorTransferByPartition(
+            amp.transferByPartition(
                 collateralPartition,
                 address(this),
                 _to,
@@ -424,11 +419,6 @@ contract ExampleCollateralManager is ERC1820Implementer, ERC1820Client {
     }
 
     function _getSupplierFromData(bytes memory _data) internal pure returns (address) {
-        bytes32 supplierPart;
-        assembly {
-            supplierPart := mload(add(_data, 32))
-        }
-        address supplier = address(uint160(bytes20(supplierPart)));
-        return supplier;
+        return abi.decode(_data, (address));
     }
 }

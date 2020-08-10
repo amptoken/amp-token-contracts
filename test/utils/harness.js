@@ -1,4 +1,8 @@
-import { DEFAULT_PARTITION, FLAG_CHANGE_PARTITION } from './constants'
+import {
+  DEFAULT_PARTITION,
+  FLAG_CHANGE_PARTITION,
+  ZERO_BYTE,
+} from './constants'
 import { concatHexData, toPartition } from './helpers'
 
 const AmpContract = artifacts.require('Amp')
@@ -45,8 +49,10 @@ export default class TestHarness {
           await this.amp.transferByPartition(
             DEFAULT_PARTITION,
             tokenHolder,
+            tokenHolder,
             amount,
             data,
+            ZERO_BYTE,
             {
               from: tokenHolder,
             }
@@ -68,17 +74,12 @@ export default class TestHarness {
     assert.equal(balance, amount)
   }
 
-  async assertTotalBalanceOf(tokenHolder, amount) {
-    const balance = await this.amp.totalBalanceOf(tokenHolder)
-    assert.equal(balance, amount)
-  }
-
   async assertBalances(tokenHolder, partitions = [], amounts = []) {
     let totalBalance = 0
     partitions.forEach(async (partition, i) => {
       totalBalance += amounts[i]
       await this.assertBalanceOfByPartition(partition, tokenHolder, amounts[i])
     })
-    await this.assertTotalBalanceOf(tokenHolder, totalBalance)
+    await this.assertBalanceOf(tokenHolder, totalBalance)
   }
 }

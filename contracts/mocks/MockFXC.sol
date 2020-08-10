@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
 
 contract MockFXC is ERC20, Ownable {
     constructor() public ERC20("Mock Flexacoin", "FXC") {}

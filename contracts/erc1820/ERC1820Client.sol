@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity ^0.6.0;
-
+pragma solidity 0.6.10;
 
 abstract contract ERC1820Registry {
     function setInterfaceImplementer(
@@ -20,7 +19,6 @@ abstract contract ERC1820Registry {
 
     function getManager(address _addr) public virtual view returns (address);
 }
-
 
 /// Base client to interact with the registry.
 contract ERC1820Client {

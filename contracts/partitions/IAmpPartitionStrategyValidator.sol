@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
-
+pragma solidity 0.6.10;
 
 /**
  * @notice Partition strategy validator hooks for Amp

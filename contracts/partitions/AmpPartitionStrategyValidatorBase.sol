@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "../erc1820/ERC1820Client.sol";
 import "../erc1820/ERC1820Implementer.sol";
 
-import "./PartitionsBase.sol";
 import "./IAmpPartitionStrategyValidator.sol";
 
+import "./lib/PartitionUtils.sol";
 
 /**
  * @title Base contract that satisfies the IAmpPartitionStrategyValidator
  * interface
  */
 contract AmpPartitionStrategyValidatorBase is
-    PartitionsBase,
     IAmpPartitionStrategyValidator,
     ERC1820Client,
     ERC1820Implementer
@@ -31,7 +30,7 @@ contract AmpPartitionStrategyValidatorBase is
     address public amp;
 
     /**
-     * @notice Initialize the partition prefix and register the implementaiton
+     * @notice Initialize the partition prefix and register the implementation
      * with the ERC1820 registry for the dynamic interface name.
      * @param _prefix Partition prefix the hooks are valid for.
      * @param _amp The address of the Amp contract.
@@ -39,7 +38,9 @@ contract AmpPartitionStrategyValidatorBase is
     constructor(bytes4 _prefix, address _amp) public {
         partitionPrefix = _prefix;
 
-        string memory iname = _getPartitionStrategyValidatorIName(partitionPrefix);
+        string memory iname = PartitionUtils._getPartitionStrategyValidatorIName(
+            partitionPrefix
+        );
         ERC1820Implementer._setInterface(iname);
 
         amp = _amp;
@@ -78,7 +79,7 @@ contract AmpPartitionStrategyValidatorBase is
     /**
      * @notice Report if address is an operator for a partition based on the
      * partition's strategy.
-     * @dev Placeholder that can be overriden by parent.
+     * @dev Placeholder that can be overridden by parent.
      */
     function isOperatorForPartitionScope(
         bytes32, /* partition */

@@ -2,6 +2,7 @@ import { shouldFail } from 'openzeppelin-test-helpers'
 import { soliditySha3 } from 'web3-utils'
 
 import { TestHarness, Constants, INames } from '../utils'
+import { DEFAULT_PARTITION, ZERO_BYTE } from '../utils/constants'
 
 const { ZERO_ADDRESS } = Constants
 const { AMP_TOKENS_SENDER, AMP_TOKENS_RECIPIENT } = INames
@@ -36,7 +37,7 @@ contract('Amp with sender and recipient hooks', function ([
   const to = recipient
 
   beforeEach(async function () {
-    this.token = await this.harness.init()
+    this.amp = await this.harness.init()
     await this.harness.mockSwap(tokenHolder, issuanceAmount)
 
     this.senderContract = await MockAmpTokensSender.new({
@@ -75,13 +76,21 @@ contract('Amp with sender and recipient hooks', function ([
   })
   describe('when the transfer is successful', function () {
     it('transfers the requested amount', async function () {
-      await this.token.transferWithData(to, amount, VALID_DATA, {
-        from: tokenHolder,
-      })
-      const senderBalance = await this.token.balanceOf(tokenHolder)
+      await this.amp.transferByPartition(
+        DEFAULT_PARTITION,
+        tokenHolder,
+        to,
+        amount,
+        VALID_DATA,
+        ZERO_BYTE,
+        {
+          from: tokenHolder,
+        }
+      )
+      const senderBalance = await this.amp.balanceOf(tokenHolder)
       assert.equal(senderBalance, issuanceAmount - amount)
 
-      const recipientBalance = await this.token.balanceOf(to)
+      const recipientBalance = await this.amp.balanceOf(to)
       assert.equal(recipientBalance, amount)
     })
   })
@@ -90,18 +99,34 @@ contract('Amp with sender and recipient hooks', function ([
       // Default sender hook failure data for the mock only:
       // 0x1100000000000000000000000000000000000000000000000000000000000000
       await shouldFail.reverting(
-        this.token.transferWithData(to, amount, INVALID_DATA_SENDER, {
-          from: tokenHolder,
-        })
+        this.amp.transferByPartition(
+          DEFAULT_PARTITION,
+          tokenHolder,
+          to,
+          amount,
+          INVALID_DATA_SENDER,
+          ZERO_BYTE,
+          {
+            from: tokenHolder,
+          }
+        )
       )
     })
     it('recipient hook reverts', async function () {
       // Default recipient hook failure data for the mock only:
       // 0x2200000000000000000000000000000000000000000000000000000000000000
       await shouldFail.reverting(
-        this.token.transferWithData(to, amount, INVALID_DATA_RECIPIENT, {
-          from: tokenHolder,
-        })
+        this.amp.transferByPartition(
+          DEFAULT_PARTITION,
+          tokenHolder,
+          to,
+          amount,
+          INVALID_DATA_RECIPIENT,
+          ZERO_BYTE,
+          {
+            from: tokenHolder,
+          }
+        )
       )
     })
   })

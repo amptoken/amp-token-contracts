@@ -30,7 +30,7 @@ contract('Amp: ERC20 Compatibility', function ([owner, tokenHolder]) {
     })
 
     it('returns the default partitions', async function () {
-      const defaultPartition = await this.amp.getDefaultPartition()
+      const defaultPartition = await this.amp.defaultPartition()
 
       assert.equal(defaultPartition, DEFAULT_PARTITION)
     })

@@ -1,5 +1,5 @@
 import { Constants, TestHarness, assertEqualEvent } from '../utils'
-import { FLAG_CHANGE_PARTITION } from '../utils/constants'
+import { FLAG_CHANGE_PARTITION, ZERO_BYTE } from '../utils/constants'
 import { concatHexData } from '../utils/helpers'
 
 const ExampleCollateralManager = artifacts.require('ExampleCollateralManager')
@@ -33,10 +33,13 @@ contract('Amp: Consuming', function ([
 
   describe(`when the token holder has supplied ${supplyAmount} tokens`, function () {
     beforeEach(async function () {
-      await this.amp.transferWithData(
+      await this.amp.transferByPartition(
+        DEFAULT_PARTITION,
+        tokenHolder,
         this.collateralContract.address,
         supplyAmount,
         concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
     })
@@ -46,26 +49,32 @@ contract('Amp: Consuming', function ([
     describe(`when the collateral manager consumes ${consumeAmount} from the token holder`, function () {
       it('succeeds', async function () {
         const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
+        const operatorData = web3.eth.abi.encodeParameters(
+          ['address'],
+          [tokenHolder]
+        )
 
-        const tx = await this.amp.operatorTransferByPartition(
+        const tx = await this.amp.transferByPartition(
           COL_PARTITION,
           this.collateralContract.address,
           this.collateralContract.address,
           consumeAmount,
           data,
-          tokenHolder,
+          operatorData,
           { from: collateralManagerOwner }
         )
 
-        await this.harness.assertTotalBalanceOf(
+        await this.harness.assertBalanceOfByPartition(
+          DEFAULT_PARTITION,
           tokenHolder,
           issuanceAmount - supplyAmount
         )
-        await this.harness.assertBalanceOf(
+        await this.harness.assertBalanceOfByPartition(
+          DEFAULT_PARTITION,
           this.collateralContract.address,
           consumeAmount
         )
-        await this.harness.assertTotalBalanceOf(
+        await this.harness.assertBalanceOf(
           this.collateralContract.address,
           supplyAmount
         )

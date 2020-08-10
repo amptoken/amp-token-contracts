@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "../extensions/IAmpTokensSender.sol";
 
 import "./AmpPartitionStrategyValidatorBase.sol";
-
 
 interface IAmp {
     function isCollateralManager(address) external view returns (bool);
@@ -16,7 +15,6 @@ interface IAmp {
         address
     ) external view returns (bool);
 }
-
 
 /**
  * @notice Partition strategy validator contract for collateral managers that
@@ -32,7 +30,7 @@ interface IAmp {
  * tokens in it's owned collateral partitions should not be moved by the holder.
  *
  * The partition owner, as well as its operators, are given permission to
- * call `Amp.operatorTransferByPartition` for any address for any partition
+ * call `Amp.transferByPartition` for any address for any partition
  * within it's owned space.
  *
  * The middle 8 bytes can be used by the collateral manager implementation for
@@ -68,7 +66,7 @@ contract HolderCollateralPartitionValidator is AmpPartitionStrategyValidatorBase
     ) external override view returns (bool) {
         require(msg.sender == address(amp), "Operator hook must be called by amp");
 
-        (, , address partitionOwner) = _splitPartition(_partition);
+        (, , address partitionOwner) = PartitionUtils._splitPartition(_partition);
 
         return
             partitionOwner == _operator ||
@@ -109,7 +107,7 @@ contract HolderCollateralPartitionValidator is AmpPartitionStrategyValidatorBase
     ) external override {
         require(msg.sender == address(amp), "Validator hook must be called by amp");
 
-        (, , address fromPartitionOwner) = _splitPartition(_fromPartition);
+        (, , address fromPartitionOwner) = PartitionUtils._splitPartition(_fromPartition);
 
         // If the tokens are being transferred by the collateral manager
         // implementation, let it flow
@@ -164,7 +162,7 @@ contract HolderCollateralPartitionValidator is AmpPartitionStrategyValidatorBase
     ) external override {
         require(msg.sender == address(amp), "Validator hook must be called by amp");
 
-        (, , address toPartitionOwner) = _splitPartition(_toPartition);
+        (, , address toPartitionOwner) = PartitionUtils._splitPartition(_toPartition);
 
         require(
             IAmp(amp).isCollateralManager(toPartitionOwner),

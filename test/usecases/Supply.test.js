@@ -1,7 +1,11 @@
 import { shouldFail } from 'openzeppelin-test-helpers'
 
 import { Constants, TestHarness, assertEqualEvent } from '../utils'
-import { ZERO_ADDRESS, FLAG_CHANGE_PARTITION } from '../utils/constants'
+import {
+  ZERO_ADDRESS,
+  FLAG_CHANGE_PARTITION,
+  ZERO_BYTE,
+} from '../utils/constants'
 import { concatHexData } from '../utils/helpers'
 
 const ExampleCollateralManager = artifacts.require('ExampleCollateralManager')
@@ -41,9 +45,11 @@ contract('Amp: Supplying', function ([
         await shouldFail.reverting(
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             ZERO_ADDRESS,
             supplyAmount,
             concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+            ZERO_BYTE,
             {
               from: tokenHolder,
             }
@@ -55,9 +61,11 @@ contract('Amp: Supplying', function ([
         await shouldFail.reverting(
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             this.collateralContract.address,
             issuanceAmount + 1,
             concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+            ZERO_BYTE,
             {
               from: tokenHolder,
             }
@@ -69,9 +77,11 @@ contract('Amp: Supplying', function ([
         await shouldFail.reverting(
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             this.collateralContract.address,
             -1,
             concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+            ZERO_BYTE,
             {
               from: tokenHolder,
             }
@@ -83,9 +93,11 @@ contract('Amp: Supplying', function ([
         await shouldFail.reverting(
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             this.collateralContract.address,
             issuanceAmount,
             concatHexData(FLAG_CHANGE_PARTITION, BAD_PARTITION),
+            ZERO_BYTE,
             {
               from: tokenHolder,
             }
@@ -106,9 +118,11 @@ contract('Amp: Supplying', function ([
       it('succeeds if amount is 0', async function () {
         await this.amp.transferByPartition(
           DEFAULT_PARTITION,
+          tokenHolder,
           this.collateralContract.address,
           0,
           concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+          ZERO_BYTE,
           {
             from: tokenHolder,
           }
@@ -123,9 +137,11 @@ contract('Amp: Supplying', function ([
         const data = concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION)
         const tx = await this.amp.transferByPartition(
           DEFAULT_PARTITION,
+          tokenHolder,
           this.collateralContract.address,
           supplyAmount,
           data,
+          ZERO_BYTE,
           {
             from: tokenHolder,
           }

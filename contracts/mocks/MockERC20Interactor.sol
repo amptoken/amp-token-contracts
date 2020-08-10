@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-
 
 contract MockERC20Interactor {
     IERC20 token;

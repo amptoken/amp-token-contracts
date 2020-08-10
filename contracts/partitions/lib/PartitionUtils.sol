@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
-
+pragma solidity 0.6.10;
 
 /**
- * @title PartitionsBase
- * @notice Partition related helper function contract.
+ * @title PartitionUtils
+ * @notice Partition related helper functions.
  */
-contract PartitionsBase {
+
+library PartitionUtils {
     bytes32 public constant CHANGE_PARTITION_FLAG = 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff;
 
     /**
@@ -18,32 +18,29 @@ contract PartitionsBase {
      *
      * When the flag is detected, the destination partition is extracted from the
      * 32 bytes following the flag.
-     * @param _fromPartition Partition the tokens are transferred from.
      * @param _data Information attached to the transfer. Will contain the
      * destination partition if a change is requested.
+     * @param _fallbackPartition Partition value to return if a partition change
+     * is not requested in the `_data`.
      * @return toPartition Destination partition. If the `_data` does not contain
      * the prefix and bytes32 partition in the first 64 bytes, the method will
      * return the provided `_fromPartition`.
      */
-    function _getDestinationPartition(bytes32 _fromPartition, bytes memory _data)
+    function _getDestinationPartition(bytes memory _data, bytes32 _fallbackPartition)
         internal
         pure
-        returns (bytes32 toPartition)
+        returns (bytes32)
     {
-        toPartition = _fromPartition;
         if (_data.length < 64) {
+            return _fallbackPartition;
+        }
+
+        (bytes32 flag, bytes32 toPartition) = abi.decode(_data, (bytes32, bytes32));
+        if (flag == CHANGE_PARTITION_FLAG) {
             return toPartition;
         }
 
-        bytes32 flag;
-        assembly {
-            flag := mload(add(_data, 32))
-        }
-        if (flag == CHANGE_PARTITION_FLAG) {
-            assembly {
-                toPartition := mload(add(_data, 64))
-            }
-        }
+        return _fallbackPartition;
     }
 
     /**

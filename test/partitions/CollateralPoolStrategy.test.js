@@ -3,11 +3,7 @@ import { shouldFail } from 'openzeppelin-test-helpers'
 import { Constants, Helpers, TestHarness } from '../utils'
 
 const { FLAG_CHANGE_PARTITION, ZERO_BYTE, DEFAULT_PARTITION } = Constants
-const {
-  concatHexData,
-  formatCollateralPartition,
-  assertRevertErrCode,
-} = Helpers
+const { concatHexData, formatCollateralPartition } = Helpers
 
 const CollateralPoolStrategyValidator = artifacts.require(
   'CollateralPoolPartitionValidator'
@@ -72,9 +68,11 @@ contract('CollateralPoolStrategyValidator', function ([
         await shouldFail.reverting(
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             this.manager.address,
             supplyAmount,
             changeToCMPartition,
+            ZERO_BYTE,
             { from: tokenHolder }
           )
         )
@@ -102,9 +100,11 @@ contract('CollateralPoolStrategyValidator', function ([
           beforeEach(async function () {
             await this.amp.transferByPartition(
               DEFAULT_PARTITION,
+              tokenHolder,
               this.manager.address,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
           })
@@ -136,9 +136,11 @@ contract('CollateralPoolStrategyValidator', function ([
           )
           await this.amp.transferByPartition(
             DEFAULT_PARTITION,
+            tokenHolder,
             this.manager.address,
             supplyAmount,
             concatHexData(FLAG_CHANGE_PARTITION, collateralPartitionOther),
+            ZERO_BYTE,
             { from: tokenHolder }
           )
 
@@ -166,12 +168,14 @@ contract('CollateralPoolStrategyValidator', function ([
             true
           )
 
-          // Use transferWithData to show optionality
           await shouldFail.reverting(
-            this.amp.transferWithData(
+            this.amp.transferByPartition(
+              DEFAULT_PARTITION,
+              tokenHolder,
               randomAddy,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
           )
@@ -195,12 +199,13 @@ contract('CollateralPoolStrategyValidator', function ([
         ''
       )
 
-      // Note: Use transferWithData to show various client optionality will
-      // execute the same paths and rules
-      await this.amp.transferWithData(
+      await this.amp.transferByPartition(
+        DEFAULT_PARTITION,
+        tokenHolder,
         this.manager.address,
         supplyAmount,
         concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
     })
@@ -217,8 +222,12 @@ contract('CollateralPoolStrategyValidator', function ([
       })
       describe('when the holder submits valid data along with the transfer request', function () {
         it('succeeds due to the partition structure granting operator permissions', async function () {
-          const VALID_DATA = '0x1111'
-          await this.amp.operatorTransferByPartition(
+          const VALID_DATA = web3.eth.abi.encodeParameters(
+            ['bytes2'],
+            ['0x1111']
+          )
+
+          await this.amp.transferByPartition(
             this.collateralPartition,
             this.manager.address,
             tokenHolder,
@@ -243,15 +252,19 @@ contract('CollateralPoolStrategyValidator', function ([
       })
       describe('when the holder submits invalid data along with the transfer request', function () {
         it('reverts', async function () {
-          const VALID_DATA = '0xFFFF'
+          const INVALID_DATA = web3.eth.abi.encodeParameters(
+            ['bytes2'],
+            ['0xFFFF']
+          )
+
           await shouldFail.reverting(
-            this.amp.operatorTransferByPartition(
+            this.amp.transferByPartition(
               this.collateralPartition,
               this.manager.address,
               tokenHolder,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
-              VALID_DATA,
+              INVALID_DATA,
               { from: tokenHolder }
             )
           )
@@ -274,7 +287,7 @@ contract('CollateralPoolStrategyValidator', function ([
     describe('when the manager tries to transfer from holders addresss', function () {
       it('reverts', async function () {
         await shouldFail.reverting(
-          this.amp.operatorTransferByPartition(
+          this.amp.transferByPartition(
             this.collateralPartition,
             tokenHolder,
             this.manager.address,

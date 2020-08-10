@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "./AmpPartitionStrategyValidatorBase.sol";
-
 
 interface IAmp {
     function isCollateralManager(address) external view returns (bool);
 }
-
 
 /**
  * @title CollateralPoolPartitionValidator
@@ -45,7 +43,7 @@ contract CollateralPoolPartitionValidator is AmpPartitionStrategyValidatorBase {
     ) external override view returns (bool) {
         require(msg.sender == address(amp), "Hook must be called by amp");
 
-        (, , address partitionOwner) = _splitPartition(_partition);
+        (, , address partitionOwner) = PartitionUtils._splitPartition(_partition);
         if (!IAmp(amp).isCollateralManager(partitionOwner)) {
             return false;
         }
@@ -75,7 +73,7 @@ contract CollateralPoolPartitionValidator is AmpPartitionStrategyValidatorBase {
     ) external override {
         require(msg.sender == address(amp), "Hook must be called by amp");
 
-        (, , address toPartitionOwner) = _splitPartition(_toPartition);
+        (, , address toPartitionOwner) = PartitionUtils._splitPartition(_toPartition);
 
         require(
             _to == toPartitionOwner,

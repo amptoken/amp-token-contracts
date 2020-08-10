@@ -1,7 +1,7 @@
 import { shouldFail } from 'openzeppelin-test-helpers'
 
 import { Constants, TestHarness, assertEqualEvent } from '../utils'
-import { FLAG_CHANGE_PARTITION } from '../utils/constants'
+import { FLAG_CHANGE_PARTITION, ZERO_BYTE } from '../utils/constants'
 import { concatHexData } from '../utils/helpers'
 
 const ExampleCollateralManager = artifacts.require('ExampleCollateralManager')
@@ -13,7 +13,7 @@ const supplyAmount = 500
 const COL_PARTITION =
   '0x0000000000000000000000000000000000000000000000000000000000001111'
 
-const VALID_DATA = '0x1111'
+const VALID_DATA = web3.eth.abi.encodeParameters(['bytes2'], ['0x1111'])
 
 contract('Amp: Withdrawing', function ([
   owner,
@@ -37,10 +37,13 @@ contract('Amp: Withdrawing', function ([
 
   describe(`when the token holder has supplied ${supplyAmount} tokens`, function () {
     beforeEach(async function () {
-      await this.amp.transferWithData(
+      await this.amp.transferByPartition(
+        DEFAULT_PARTITION,
+        tokenHolder,
         this.collateralContract.address,
         supplyAmount,
         concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
     })
@@ -54,7 +57,7 @@ contract('Amp: Withdrawing', function ([
         const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
         const operatorData = VALID_DATA
         await shouldFail.reverting(
-          this.amp.operatorTransferByPartition(
+          this.amp.transferByPartition(
             COL_PARTITION,
             this.collateralContract.address,
             tokenHolder,
@@ -73,7 +76,7 @@ contract('Amp: Withdrawing', function ([
           const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
           const operatorData = '0x'
           await shouldFail.reverting(
-            this.amp.operatorTransferByPartition(
+            this.amp.transferByPartition(
               COL_PARTITION,
               this.collateralContract.address,
               tokenHolder,
@@ -89,9 +92,12 @@ contract('Amp: Withdrawing', function ([
       describe('with invalid proof data', function () {
         it('reverts', async function () {
           const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
-          const operatorData = '0x2222'
+          const operatorData = web3.eth.abi.encodeParameters(
+            ['bytes2'],
+            ['0x2222']
+          )
           await shouldFail.reverting(
-            this.amp.operatorTransferByPartition(
+            this.amp.transferByPartition(
               COL_PARTITION,
               this.collateralContract.address,
               tokenHolder,
@@ -114,7 +120,7 @@ contract('Amp: Withdrawing', function ([
 
           const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
           const operatorData = VALID_DATA
-          const tx = await this.amp.operatorTransferByPartition(
+          const tx = await this.amp.transferByPartition(
             COL_PARTITION,
             this.collateralContract.address,
             tokenHolder,
@@ -157,7 +163,7 @@ contract('Amp: Withdrawing', function ([
         const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
         const operatorData = VALID_DATA
         await shouldFail.reverting(
-          this.amp.operatorTransferByPartition(
+          this.amp.transferByPartition(
             COL_PARTITION,
             this.collateralContract.address,
             tokenHolder,
@@ -181,13 +187,18 @@ contract('Amp: Withdrawing', function ([
           { from: tokenHolder }
         )
 
-        await this.amp.operatorTransferByPartition(
+        const operatorData = web3.eth.abi.encodeParameters(
+          ['address'],
+          [tokenHolder]
+        )
+
+        await this.amp.transferByPartition(
           DEFAULT_PARTITION,
           this.collateralContract.address,
           this.collateralContract.address,
           rewardAmount,
           concatHexData(FLAG_CHANGE_PARTITION, COL_PARTITION),
-          tokenHolder,
+          operatorData,
           { from: collateralManagerOwner }
         )
       })
@@ -203,7 +214,7 @@ contract('Amp: Withdrawing', function ([
         const data = concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION)
         const operatorData = VALID_DATA
 
-        const tx = await this.amp.operatorTransferByPartition(
+        const tx = await this.amp.transferByPartition(
           COL_PARTITION,
           this.collateralContract.address,
           tokenHolder,
@@ -213,8 +224,12 @@ contract('Amp: Withdrawing', function ([
           { from: tokenHolder }
         )
 
-        await this.harness.assertBalanceOf(tokenHolder, rewardAmount)
-        await this.harness.assertTotalBalanceOf(
+        await this.harness.assertBalanceOfByPartition(
+          DEFAULT_PARTITION,
+          tokenHolder,
+          rewardAmount
+        )
+        await this.harness.assertBalanceOf(
           this.collateralContract.address,
           issuanceAmount - rewardAmount
         )

@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "../erc1820/ERC1820Client.sol";
 import "../erc1820/ERC1820Implementer.sol";
-
 
 interface IAmp {
     function registerCollateralManager() external;
 
     function authorizeOperator(address) external;
 
-    function operatorTransferByPartition(
+    function transferByPartition(
         bytes32 _partition,
         address _from,
         address _to,
@@ -20,7 +19,6 @@ interface IAmp {
         bytes calldata _operatorData
     ) external returns (bytes32);
 }
-
 
 contract MockCollateralPool is ERC1820Implementer, ERC1820Client {
     string internal constant AMP_TOKENS_RECIPIENT = "AmpTokensRecipient";
@@ -102,15 +100,9 @@ contract MockCollateralPool is ERC1820Implementer, ERC1820Client {
             return;
         }
 
-        bytes memory odata = _operatorData;
-        bytes32 proof;
-        assembly {
-            proof := mload(add(odata, 32))
-        }
-        require(
-            bytes2(proof) == VALID_DATA,
-            "Holder cant transfer: Tokens collateralization"
-        );
+        bytes2 proof = abi.decode(_operatorData, (bytes2));
+
+        require(proof == VALID_DATA, "Holder cant transfer: Tokens collateralization");
     }
 
     function testConsume(
@@ -119,13 +111,6 @@ contract MockCollateralPool is ERC1820Implementer, ERC1820Client {
         uint256 _value,
         bytes calldata _data
     ) external {
-        amp.operatorTransferByPartition(
-            _fromPartition,
-            _from,
-            address(this),
-            _value,
-            _data,
-            ""
-        );
+        amp.transferByPartition(_fromPartition, _from, address(this), _value, _data, "");
     }
 }

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
+pragma solidity 0.6.10;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import "./Ownable.sol";
 
 import "./erc1820/ERC1820Client.sol";
 import "./erc1820/ERC1820Implementer.sol";
@@ -13,10 +14,9 @@ import "./extensions/IAmpTokensSender.sol";
 import "./extensions/IAmpTokensRecipient.sol";
 
 import "./partitions/IAmpPartitionStrategyValidator.sol";
-import "./partitions/PartitionsBase.sol";
+import "./partitions/lib/PartitionUtils.sol";
 
 import "./codes/ErrorCodes.sol";
-
 
 interface ISwapToken {
     function allowance(address owner, address spender)
@@ -30,7 +30,6 @@ interface ISwapToken {
         uint256 value
     ) external returns (bool success);
 }
-
 
 /**
  * @title Amp
@@ -77,14 +76,7 @@ interface ISwapToken {
  * providing a consistent, "collateral-in-place", interface for interacting
  * with collateral systems directly through the Amp contract.
  */
-contract Amp is
-    IERC20,
-    ERC1820Client,
-    ERC1820Implementer,
-    PartitionsBase,
-    ErrorCodes,
-    Ownable
-{
+contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     using SafeMath for uint256;
 
     /**************************************************************************/
@@ -99,11 +91,6 @@ contract Amp is
      * @dev ERC20Token interface label.
      */
     string internal constant ERC20_INTERFACE_NAME = "ERC20Token";
-
-    /**
-     * @dev ERC777Token interface label.
-     */
-    string internal constant ERC777_INTERFACE_NAME = "ERC777Token";
 
     /**
      * @dev AmpTokensSender interface label.
@@ -148,14 +135,10 @@ contract Amp is
     /***************************** Token mappings *****************************/
 
     /**
-     * @dev Mapping from tokenHolder to balance.
+     * @dev Mapping from tokenHolder to balance. This reflects the balance
+     * across all partitions of an address.
      */
     mapping(address => uint256) internal _balances;
-
-    /**
-     * @dev Mapping from (tokenHolder, spender) to allowed value.
-     */
-    mapping(address => mapping(address => uint256)) internal _allowed;
 
     /**************************************************************************/
     /************************** Partition mappings ****************************/
@@ -196,11 +179,12 @@ contract Amp is
      * @notice Default partition of the token.
      * @dev All ERC20 operations operate solely on this partition.
      */
-    bytes32 public constant defaultPartition = 0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32
+        public constant defaultPartition = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
     /**
-     * @dev Zero partition prefix. Parititions with this prefix can not have a strategy assigned,
-     * and partitions with a different prefix must have one.
+     * @dev Zero partition prefix. Parititions with this prefix can not have
+     * a strategy assigned, and partitions with a different prefix must have one.
      */
     bytes4 internal constant ZERO_PREFIX = 0x00000000;
 
@@ -220,13 +204,15 @@ contract Amp is
      * @dev Mapping from (partition, tokenHolder, spender) to allowed value.
      * This is specific to the token holder.
      */
-    mapping(bytes32 => mapping(address => mapping(address => uint256))) internal _allowedByPartition;
+    mapping(bytes32 => mapping(address => mapping(address => uint256)))
+        internal _allowedByPartition;
 
     /**
      * @dev Mapping from (tokenHolder, partition, operator) to 'approved for
      * partition' status. This is specific to the token holder.
      */
-    mapping(address => mapping(bytes32 => mapping(address => bool))) internal _authorizedOperatorByPartition;
+    mapping(address => mapping(bytes32 => mapping(address => bool)))
+        internal _authorizedOperatorByPartition;
 
     /**************************************************************************/
     /********************** Collateral Manager mappings ***********************/
@@ -256,7 +242,7 @@ contract Amp is
     /***************************** Swap storage *******************************/
 
     /**
-     * @notice Swap token address.
+     * @notice Swap token address. Immutable.
      */
     ISwapToken public swapToken;
 
@@ -265,7 +251,8 @@ contract Amp is
      * @dev This is the address that the incoming swapped tokens will be
      * forwarded to upon successfully minting Amp.
      */
-    address public constant swapTokenGraveyard = 0x000000000000000000000000000000000000dEaD;
+    address
+        public constant swapTokenGraveyard = 0x000000000000000000000000000000000000dEaD;
 
     /**************************************************************************/
     /** EVENTS ****************************************************************/
@@ -456,10 +443,9 @@ contract Amp is
         ERC1820Client.setInterfaceImplementation(AMP_INTERFACE_NAME, address(this));
         ERC1820Client.setInterfaceImplementation(ERC20_INTERFACE_NAME, address(this));
 
-        // Indicate token verifies Amp, ERC777 and ERC20 interfaces
+        // Indicate token verifies Amp and ERC20 interfaces
         ERC1820Implementer._setInterface(AMP_INTERFACE_NAME);
         ERC1820Implementer._setInterface(ERC20_INTERFACE_NAME);
-        // ERC1820Implementer._setInterface(ERC777_INTERFACE_NAME);
     }
 
     /**************************************************************************/
@@ -476,18 +462,23 @@ contract Amp is
 
     /**
      * @notice Get the balance of the account with address `_tokenHolder`.
-     * @dev This returns the balance of the holder by the default partition, in
-     * order to be compatible with ERC20, as the default partition is the only
-     * on where the tokens are guaranteed to be unlocked.
+     * @dev This returns the balance of the holder across all partitions. Note
+     * that due to other functionality in Amp, this figure should not be used
+     * as the arbiter of the amount a token holder will successfully be able to
+     * send via the ERC20 compatible `transfer` method. In order to get that
+     * figure, use `balanceOfByParition` and to get the balance of the default
+     * partition.
      * @param _tokenHolder Address for which the balance is returned.
      * @return Amount of token held by `_tokenHolder` in the default partition.
      */
     function balanceOf(address _tokenHolder) external override view returns (uint256) {
-        return _balanceOfByPartition[_tokenHolder][defaultPartition];
+        return _balances[_tokenHolder];
     }
 
     /**
      * @notice Transfer token for a specified address.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * balance of the `msg.sender` address's default partition.
      * @param _to The address to transfer to.
      * @param _value The value to be transferred.
      * @return A boolean that indicates if the operation was successful.
@@ -498,7 +489,27 @@ contract Amp is
     }
 
     /**
+     * @notice Transfer tokens from one address to another.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * balance and allowance of the `_from` address's default partition.
+     * @param _from The address which you want to transfer tokens from.
+     * @param _to The address which you want to transfer to.
+     * @param _value The amount of tokens to be transferred.
+     * @return A boolean that indicates if the operation was successful.
+     */
+    function transferFrom(
+        address _from,
+        address _to,
+        uint256 _value
+    ) external override returns (bool) {
+        _transferByDefaultPartition(msg.sender, _from, _to, _value, "");
+        return true;
+    }
+
+    /**
      * @notice Check the value of tokens that an owner allowed to a spender.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * allowance of the `msg.sender`'s default partition.
      * @param _owner address The address which owns the funds.
      * @param _spender address The address which will spend the funds.
      * @return A uint256 specifying the value of tokens still available for the
@@ -510,18 +521,20 @@ contract Amp is
         view
         returns (uint256)
     {
-        return _allowed[_owner][_spender];
+        return _allowedByPartition[defaultPartition][_owner][_spender];
     }
 
     /**
      * @notice Approve the passed address to spend the specified amount of
-     * tokens on behalf of 'msg.sender'.
+     * tokens from the default partition on behalf of 'msg.sender'.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * allowance of the `msg.sender`'s default partition.
      * @param _spender The address which will spend the funds.
      * @param _value The amount of tokens to be spent.
      * @return A boolean that indicates if the operation was successful.
      */
     function approve(address _spender, uint256 _value) external override returns (bool) {
-        _approve(msg.sender, _spender, _value);
+        _approveByPartition(defaultPartition, msg.sender, _spender, _value);
         return true;
     }
 
@@ -533,6 +546,8 @@ contract Amp is
      * Emits an {Approval} event indicating the updated allowance.
      * Requirements:
      * - `_spender` cannot be the zero address.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * allowance of the `msg.sender`'s default partition.
      * @param _spender Operator allowed to transfer the tokens
      * @param _addedValue Additional amount of the `msg.sender`s tokens `_spender`
      * is allowed to transfer
@@ -542,7 +557,12 @@ contract Amp is
         external
         returns (bool)
     {
-        _approve(msg.sender, _spender, _allowed[msg.sender][_spender].add(_addedValue));
+        _approveByPartition(
+            defaultPartition,
+            msg.sender,
+            _spender,
+            _allowedByPartition[defaultPartition][msg.sender][_spender].add(_addedValue)
+        );
         return true;
     }
 
@@ -556,6 +576,8 @@ contract Amp is
      * - `_spender` cannot be the zero address.
      * - `_spender` must have allowance for the caller of at least
      * `_subtractedValue`.
+     * @dev This method is for ERC20 compatibility, and only affects the
+     * allowance of the `msg.sender`'s default partition.
      * @param _spender Operator allowed to transfer the tokens
      * @param _subtractedValue Amount of the `msg.sender`s tokens `_spender`
      * is no longer allowed to transfer
@@ -565,38 +587,14 @@ contract Amp is
         external
         returns (bool)
     {
-        _approve(
+        _approveByPartition(
+            defaultPartition,
             msg.sender,
             _spender,
-            _allowed[msg.sender][_spender].sub(_subtractedValue)
+            _allowedByPartition[defaultPartition][msg.sender][_spender].sub(
+                _subtractedValue
+            )
         );
-        return true;
-    }
-
-    /**
-     * @notice Transfer tokens from one address to another.
-     * @param _from The address which you want to transfer tokens from.
-     * @param _to The address which you want to transfer to.
-     * @param _value The amount of tokens to be transferred.
-     * @return A boolean that indicates if the operation was successful.
-     */
-    function transferFrom(
-        address _from,
-        address _to,
-        uint256 _value
-    ) external override returns (bool) {
-        require(
-            _isOperator(msg.sender, _from) || (_value <= _allowed[_from][msg.sender]),
-            EC_53_INSUFFICIENT_ALLOWANCE
-        );
-
-        if (_allowed[_from][msg.sender] >= _value) {
-            _allowed[_from][msg.sender] = _allowed[_from][msg.sender].sub(_value);
-        } else {
-            _allowed[_from][msg.sender] = 0;
-        }
-
-        _transferByDefaultPartition(msg.sender, _from, _to, _value, "");
         return true;
     }
 
@@ -616,25 +614,18 @@ contract Amp is
         uint256 amount = swapToken.allowance(_from, address(this));
         require(amount > 0, EC_53_INSUFFICIENT_ALLOWANCE);
 
-        swapToken.transferFrom(_from, swapTokenGraveyard, amount);
+        require(
+            swapToken.transferFrom(_from, swapTokenGraveyard, amount),
+            EC_60_SWAP_TRANSFER_FAILURE
+        );
 
-        _mint(msg.sender, _from, amount, "");
+        _mint(msg.sender, _from, amount);
 
         emit Swap(msg.sender, _from, amount);
     }
 
     /**************************************************************************/
     /************************** Holder information ****************************/
-
-    /**
-     * @notice Get the balance of the account with address `_tokenHolder` across all
-     * partitions.
-     * @param _tokenHolder Address for which the balance is returned.
-     * @return Amount of tokens held by `_tokenHolder` in the token contract.
-     */
-    function totalBalanceOf(address _tokenHolder) external view returns (uint256) {
-        return _balances[_tokenHolder];
-    }
 
     /**
      * @notice Get balance of a tokenholder for a specific partition.
@@ -660,82 +651,18 @@ contract Amp is
     }
 
     /**************************************************************************/
-    /****************************** Transfers *********************************/
-
-    /**
-     * @notice Transfer tokens from the sender to another address, optionally
-     * including arbitirary data.
-     * @dev Transfer the amount of tokens from the address 'msg.sender' to the
-     * address `_to`.
-     * @param _to Token recipient.
-     * @param _value Number of tokens to transfer.
-     * @param _data Information attached to the transfer, by the token holder.
-     */
-    function transferWithData(
-        address _to,
-        uint256 _value,
-        bytes calldata _data
-    ) external {
-        _transferByDefaultPartition(msg.sender, msg.sender, _to, _value, _data);
-    }
-
-    /**
-     * @notice Transfer tokens on behalf of a token holder to another address,
-     * optionally including arbitirary data.
-     * @dev Transfer the amount of tokens on behalf of the address '_from' to
-     * the address 'to'. The `msg.sender` must be an operator for `_from`.
-     * @param _from Token holder (or 'address(0)' to set from to 'msg.sender').
-     * @param _to Token recipient.
-     * @param _value Number of tokens to transfer.
-     * @param _data Information attached to the transfer, and intended for the
-     * token holder (`_from`).
-     */
-    function transferFromWithData(
-        address _from,
-        address _to,
-        uint256 _value,
-        bytes calldata _data
-    ) external {
-        require(_isOperator(msg.sender, _from), EC_58_INVALID_OPERATOR);
-
-        _transferByDefaultPartition(msg.sender, _from, _to, _value, _data);
-    }
-
-    /**************************************************************************/
-    /********************* Partition Token Transfers **************************/
-
-    /**
-     * @notice Transfer tokens from a specific partition.
-     * @param _partition Name of the partition.
-     * @param _to Token recipient.
-     * @param _value Number of tokens to transfer.
-     * @param _data Information attached to the transfer, by the token holder.
-     * @return Destination partition.
-     */
-    function transferByPartition(
-        bytes32 _partition,
-        address _to,
-        uint256 _value,
-        bytes calldata _data
-    ) external returns (bytes32) {
-        return
-            _transferByPartition(
-                _partition,
-                msg.sender,
-                msg.sender,
-                _to,
-                _value,
-                _data,
-                ""
-            );
-    }
+    /************************** Advanced Transfers ****************************/
 
     /**
      * @notice Transfer tokens from a specific partition on behalf of a token
      * holder, optionally changing the parittion and optionally including
      * arbitrary data with the transfer.
-     * @dev Transfer tokens from a specific partition through an operator.
-     * @param _partition Name of the partition.
+     * @dev This can be used to transfer an address's own tokens, or transfer
+     * a different addresses tokens by specifying the `_from` param. If
+     * attempting to transfer from a different address than `msg.sender`, the
+     * `msg.sender` will need to be an operator or have enough allowance for the
+     * `_partition` of the `_from` address.
+     * @param _partition Name of the partition to transfer from.
      * @param _from Token holder.
      * @param _to Token recipient.
      * @param _value Number of tokens to transfer.
@@ -744,7 +671,7 @@ contract Amp is
      * @param _operatorData Information attached to the transfer, by the operator.
      * @return Destination partition.
      */
-    function operatorTransferByPartition(
+    function transferByPartition(
         bytes32 _partition,
         address _from,
         address _to,
@@ -752,19 +679,6 @@ contract Amp is
         bytes calldata _data,
         bytes calldata _operatorData
     ) external returns (bytes32) {
-        require(
-            _isOperatorForPartition(_partition, msg.sender, _from) ||
-                (_value <= _allowedByPartition[_partition][_from][msg.sender]),
-            EC_53_INSUFFICIENT_ALLOWANCE
-        );
-
-        if (_allowedByPartition[_partition][_from][msg.sender] >= _value) {
-            _allowedByPartition[_partition][_from][msg
-                .sender] = _allowedByPartition[_partition][_from][msg.sender].sub(_value);
-        } else {
-            _allowedByPartition[_partition][_from][msg.sender] = 0;
-        }
-
         return
             _transferByPartition(
                 _partition,
@@ -783,10 +697,13 @@ contract Amp is
     /**
      * @notice Set a third party operator address as an operator of 'msg.sender'
      * to transfer and redeem tokens on its behalf.
+     * @dev The msg.sender is always an operator for itself, and does not need to
+     * be explicitly added.
      * @param _operator Address to set as an operator for 'msg.sender'.
      */
     function authorizeOperator(address _operator) external {
-        require(_operator != msg.sender);
+        require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
+
         _authorizedOperator[msg.sender][_operator] = true;
         emit AuthorizedOperator(_operator, msg.sender);
     }
@@ -794,22 +711,29 @@ contract Amp is
     /**
      * @notice Remove the right of the operator address to be an operator for
      * 'msg.sender' and to transfer and redeem tokens on its behalf.
+     * @dev The msg.sender is always an operator for itself, and cannot be
+     * removed.
      * @param _operator Address to rescind as an operator for 'msg.sender'.
      */
     function revokeOperator(address _operator) external {
-        require(_operator != msg.sender);
+        require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
+
         _authorizedOperator[msg.sender][_operator] = false;
         emit RevokedOperator(_operator, msg.sender);
     }
 
     /**
-     * @dev Set `_operator` as an operator for 'msg.sender' for a given partition.
+     * @notice Set `_operator` as an operator for 'msg.sender' for a given partition.
+     * @dev The msg.sender is always an operator for itself, and does not need to
+     * be explicitly added to a partition.
      * @param _partition Name of the partition.
      * @param _operator Address to set as an operator for 'msg.sender'.
      */
     function authorizeOperatorByPartition(bytes32 _partition, address _operator)
         external
     {
+        require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
+
         _authorizedOperatorByPartition[msg.sender][_partition][_operator] = true;
         emit AuthorizedOperatorByPartition(_partition, _operator, msg.sender);
     }
@@ -818,11 +742,15 @@ contract Amp is
      * @notice Remove the right of the operator address to be an operator on a
      * given partition for 'msg.sender' and to transfer and redeem tokens on its
      * behalf.
+     * @dev The msg.sender is always an operator for itself, and cannot be
+     * removed from a partition.
      * @param _partition Name of the partition.
      * @param _operator Address to rescind as an operator on given partition for
      * 'msg.sender'.
      */
     function revokeOperatorByPartition(bytes32 _partition, address _operator) external {
+        require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
+
         _authorizedOperatorByPartition[msg.sender][_partition][_operator] = false;
         emit RevokedOperatorByPartition(_partition, _operator, msg.sender);
     }
@@ -832,6 +760,8 @@ contract Amp is
     /**
      * @notice Indicate whether the `_operator` address is an operator of the
      * `_tokenHolder` address.
+     * @dev An operator in this case is an operator across all of the partitions
+     * of the `msg.sender` address.
      * @param _operator Address which may be an operator of `_tokenHolder`.
      * @param _tokenHolder Address of a token holder which may have the
      * `_operator` address as an operator.
@@ -931,16 +861,6 @@ contract Amp is
      */
     function totalPartitions() external view returns (bytes32[] memory) {
         return _totalPartitions;
-    }
-
-    /************************************************************************************************/
-    /********************************* Token default partitions *************************************/
-    /**
-     * @notice Get default partition to transfer from.
-     * @return The default partition.
-     */
-    function getDefaultPartition() external pure returns (bytes32) {
-        return defaultPartition;
     }
 
     /************************************************************************************************/
@@ -1075,14 +995,12 @@ contract Amp is
      * @param _prefix The 4 byte partition prefix the strategy applies to.
      * @param _implementation The address of the implementation of the strategy hooks.
      */
-    function setPartitionStrategy(bytes4 _prefix, address _implementation)
-        external
-        onlyOwner
-    {
+    function setPartitionStrategy(bytes4 _prefix, address _implementation) external {
+        require(msg.sender == owner(), EC_56_INVALID_SENDER);
         require(!_isPartitionStrategy[_prefix], EC_5E_PARTITION_PREFIX_CONFLICT);
         require(_prefix != ZERO_PREFIX, EC_5F_INVALID_PARTITION_PREFIX_0);
 
-        string memory iname = _getPartitionStrategyValidatorIName(_prefix);
+        string memory iname = PartitionUtils._getPartitionStrategyValidatorIName(_prefix);
 
         ERC1820Client.setInterfaceImplementation(iname, _implementation);
         partitionStrategies.push(_prefix);
@@ -1107,25 +1025,6 @@ contract Amp is
 
     /**************************************************************************/
     /**************************** Token Transfers *****************************/
-    /**
-     * @notice Perform the transfer of tokens.
-     * @param _from Token holder.
-     * @param _to Token recipient.
-     * @param _value Number of tokens to transfer.
-     */
-    function _transfer(
-        address _from,
-        address _to,
-        uint256 _value
-    ) internal {
-        require(_to != address(0), EC_57_INVALID_RECEIVER);
-        require(_balances[_from] >= _value, EC_52_INSUFFICIENT_BALANCE);
-
-        _balances[_from] = _balances[_from].sub(_value);
-        _balances[_to] = _balances[_to].add(_value);
-
-        emit Transfer(_from, _to, _value);
-    }
 
     /**
      * @dev Transfer tokens from a specific partition.
@@ -1149,14 +1048,28 @@ contract Amp is
         bytes memory _data,
         bytes memory _operatorData
     ) internal returns (bytes32) {
-        require(
-            _balanceOfByPartition[_from][_fromPartition] >= _value,
-            EC_52_INSUFFICIENT_BALANCE
-        );
+        require(_to != address(0), EC_57_INVALID_RECEIVER);
 
-        bytes32 toPartition = _fromPartition;
-        if (_data.length >= 64) {
-            toPartition = _getDestinationPartition(_fromPartition, _data);
+        // If the `_operator` is attempting to transfer from a different `_from`
+        // address, first check that they have the requisite operator or
+        // allowance permissions.
+        if (_from != _operator) {
+            require(
+                _isOperatorForPartition(_fromPartition, _operator, _from) ||
+                    (_value <= _allowedByPartition[_fromPartition][_from][_operator]),
+                EC_53_INSUFFICIENT_ALLOWANCE
+            );
+
+            // If the sender has an allowance for the partition, that should
+            // be decremented
+            if (_allowedByPartition[_fromPartition][_from][_operator] >= _value) {
+                _allowedByPartition[_fromPartition][_from][msg
+                    .sender] = _allowedByPartition[_fromPartition][_from][_operator].sub(
+                    _value
+                );
+            } else {
+                _allowedByPartition[_fromPartition][_from][_operator] = 0;
+            }
         }
 
         _callPreTransferHooks(
@@ -1169,10 +1082,18 @@ contract Amp is
             _operatorData
         );
 
-        _removeTokenFromPartition(_from, _fromPartition, _value);
-        _transfer(_from, _to, _value);
-        _addTokenToPartition(_to, toPartition, _value);
+        require(
+            _balanceOfByPartition[_from][_fromPartition] >= _value,
+            EC_52_INSUFFICIENT_BALANCE
+        );
 
+        bytes32 toPartition = PartitionUtils._getDestinationPartition(
+            _data,
+            _fromPartition
+        );
+
+        _removeTokenFromPartition(_from, _fromPartition, _value);
+        _addTokenToPartition(_to, toPartition, _value);
         _callPostTransferHooks(
             toPartition,
             _operator,
@@ -1183,6 +1104,7 @@ contract Amp is
             _operatorData
         );
 
+        emit Transfer(_from, _to, _value);
         emit TransferByPartition(
             _fromPartition,
             _operator,
@@ -1232,6 +1154,12 @@ contract Amp is
         bytes32 _partition,
         uint256 _value
     ) internal {
+        if (_value == 0) {
+            return;
+        }
+
+        _balances[_from] = _balances[_from].sub(_value);
+
         _balanceOfByPartition[_from][_partition] = _balanceOfByPartition[_from][_partition]
             .sub(_value);
         totalSupplyByPartition[_partition] = totalSupplyByPartition[_partition].sub(
@@ -1274,21 +1202,25 @@ contract Amp is
         bytes32 _partition,
         uint256 _value
     ) internal {
-        if (_value != 0) {
-            if (_indexOfPartitionsOf[_to][_partition] == 0) {
-                _partitionsOf[_to].push(_partition);
-                _indexOfPartitionsOf[_to][_partition] = _partitionsOf[_to].length;
-            }
-            _balanceOfByPartition[_to][_partition] = _balanceOfByPartition[_to][_partition]
-                .add(_value);
-
-            if (_indexOfTotalPartitions[_partition] == 0) {
-                _addPartitionToTotalPartitions(_partition);
-            }
-            totalSupplyByPartition[_partition] = totalSupplyByPartition[_partition].add(
-                _value
-            );
+        if (_value == 0) {
+            return;
         }
+
+        _balances[_to] = _balances[_to].add(_value);
+
+        if (_indexOfPartitionsOf[_to][_partition] == 0) {
+            _partitionsOf[_to].push(_partition);
+            _indexOfPartitionsOf[_to][_partition] = _partitionsOf[_to].length;
+        }
+        _balanceOfByPartition[_to][_partition] = _balanceOfByPartition[_to][_partition]
+            .add(_value);
+
+        if (_indexOfTotalPartitions[_partition] == 0) {
+            _addPartitionToTotalPartitions(_partition);
+        }
+        totalSupplyByPartition[_partition] = totalSupplyByPartition[_partition].add(
+            _value
+        );
     }
 
     /**
@@ -1362,12 +1294,12 @@ contract Amp is
 
         // Used to ensure that hooks implemented by a collateral manager to validate
         // transfers from it's owned partitions are called
-        bytes4 fromPartitionPrefix = _getPartitionPrefix(_fromPartition);
+        bytes4 fromPartitionPrefix = PartitionUtils._getPartitionPrefix(_fromPartition);
         if (_isPartitionStrategy[fromPartitionPrefix]) {
             address fromPartitionValidatorImplementation;
             fromPartitionValidatorImplementation = interfaceAddr(
                 address(this),
-                _getPartitionStrategyValidatorIName(fromPartitionPrefix)
+                PartitionUtils._getPartitionStrategyValidatorIName(fromPartitionPrefix)
             );
             if (fromPartitionValidatorImplementation != address(0)) {
                 IAmpPartitionStrategyValidator(fromPartitionValidatorImplementation)
@@ -1405,12 +1337,12 @@ contract Amp is
         bytes memory _data,
         bytes memory _operatorData
     ) internal {
-        bytes4 toPartitionPrefix = _getPartitionPrefix(_toPartition);
+        bytes4 toPartitionPrefix = PartitionUtils._getPartitionPrefix(_toPartition);
         if (_isPartitionStrategy[toPartitionPrefix]) {
             address partitionManagerImplementation;
             partitionManagerImplementation = interfaceAddr(
                 address(this),
-                _getPartitionStrategyValidatorIName(toPartitionPrefix)
+                PartitionUtils._getPartitionStrategyValidatorIName(toPartitionPrefix)
             );
             if (partitionManagerImplementation != address(0)) {
                 IAmpPartitionStrategyValidator(partitionManagerImplementation)
@@ -1449,32 +1381,6 @@ contract Amp is
     /**************************************************************************/
     /******************************* Allowance ********************************/
     /**
-     * @notice Sets `_amount` as the allowance of `_spender` over the
-     * `_tokenHolder`s tokens.
-     * @dev This is internal function is equivalent to `approve`, and can be used
-     * to e.g. set automatic allowances for certain subsystems, etc.
-     * Emits an {Approval} event.
-     * Requirements:
-     * - `_tokenHolder` cannot be the zero address.
-     * - `_spender` cannot be the zero address.
-     * @param _tokenHolder Owner of the tokens
-     * @param _spender Operator allowed to transfer the tokens
-     * @param _amount Amount of `_tokenHolder`s tokens `_spender` is allowed to
-     * transfer
-     */
-    function _approve(
-        address _tokenHolder,
-        address _spender,
-        uint256 _amount
-    ) internal {
-        require(_tokenHolder != address(0), EC_56_INVALID_SENDER);
-        require(_spender != address(0), EC_58_INVALID_OPERATOR);
-
-        _allowed[_tokenHolder][_spender] = _amount;
-        emit Approval(_tokenHolder, _spender, _amount);
-    }
-
-    /**
      * @notice Approve the `_spender` address to spend the specified amount of
      * tokens in `_partition` on behalf of 'msg.sender'.
      * @param _partition Name of the partition.
@@ -1490,15 +1396,21 @@ contract Amp is
     ) internal {
         require(_tokenHolder != address(0), EC_56_INVALID_SENDER);
         require(_spender != address(0), EC_58_INVALID_OPERATOR);
+
         _allowedByPartition[_partition][_tokenHolder][_spender] = _amount;
         emit ApprovalByPartition(_partition, _tokenHolder, _spender, _amount);
+
+        if (_partition == defaultPartition) {
+            emit Approval(_tokenHolder, _spender, _amount);
+        }
     }
 
     /**************************************************************************/
     /************************** Operator Information **************************/
     /**
      * @dev Indicate whether the operator address is an operator of the
-     * tokenHolder address.
+     * tokenHolder address. An operator in this case is an operator across all
+     * partitions of the `msg.sender` address.
      * @param _operator Address which may be an operator of '_tokenHolder'.
      * @param _tokenHolder Address of a token holder which may have the '_operator'
      * address as an operator.
@@ -1515,8 +1427,8 @@ contract Amp is
     }
 
     /**
-     * @dev Indicate whether the operator address is an operator of the tokenHolder
-     * address for the given partition.
+     * @dev Indicate whether the operator address is an operator of the
+     * tokenHolder address for the given partition.
      * @param _partition Name of the partition.
      * @param _operator Address which may be an operator of tokenHolder for the
      * given partition.
@@ -1550,7 +1462,7 @@ contract Amp is
         address _operator,
         address _tokenHolder
     ) internal view returns (bool) {
-        bytes4 prefix = _getPartitionPrefix(_partition);
+        bytes4 prefix = PartitionUtils._getPartitionPrefix(_partition);
 
         if (!_isPartitionStrategy[prefix]) {
             return false;
@@ -1559,7 +1471,7 @@ contract Amp is
         address strategyValidatorImplementation;
         strategyValidatorImplementation = interfaceAddr(
             address(this),
-            _getPartitionStrategyValidatorIName(prefix)
+            PartitionUtils._getPartitionStrategyValidatorIName(prefix)
         );
         if (strategyValidatorImplementation != address(0)) {
             return
@@ -1580,20 +1492,15 @@ contract Amp is
      * @param _operator Address which triggered the issuance.
      * @param _to Token recipient.
      * @param _value Number of tokens issued.
-     * @param _data Information attached to the minting, and intended for the
-     * recipient (`_to`).
      */
     function _mint(
         address _operator,
         address _to,
-        uint256 _value,
-        bytes memory _data
+        uint256 _value
     ) internal {
         require(_to != address(0), EC_57_INVALID_RECEIVER);
 
         _totalSupply = _totalSupply.add(_value);
-        _balances[_to] = _balances[_to].add(_value);
-
         _addTokenToPartition(_to, defaultPartition, _value);
         _callPostTransferHooks(
             defaultPartition,
@@ -1601,11 +1508,12 @@ contract Amp is
             address(0),
             _to,
             _value,
-            _data,
+            "",
             ""
         );
 
-        emit Minted(_operator, _to, _value, _data);
+        emit Minted(_operator, _to, _value, "");
         emit Transfer(address(0), _to, _value);
+        emit TransferByPartition(bytes32(0), _operator, address(0), _to, _value, "", "");
     }
 }

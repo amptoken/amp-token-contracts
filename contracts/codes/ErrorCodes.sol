@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.6.9;
-
+pragma solidity 0.6.10;
 
 /**
  * @title ErrorCodes
@@ -25,4 +24,5 @@ contract ErrorCodes {
     string internal EC_5D_PARTITION_RESERVED = "5D";
     string internal EC_5E_PARTITION_PREFIX_CONFLICT = "5E";
     string internal EC_5F_INVALID_PARTITION_PREFIX_0 = "5F";
+    string internal EC_60_SWAP_TRANSFER_FAILURE = "60";
 }

@@ -1,6 +1,5 @@
 import { shouldFail } from 'openzeppelin-test-helpers'
 import { TestHarness, Constants, Events } from './utils'
-import { assertRevertErrCode } from './utils/helpers'
 
 const { FXC_GRAVEYARD, ZERO_ADDRESS, DEFAULT_PARTITION } = Constants
 const emptyBalance = 0
@@ -36,7 +35,8 @@ contract('Amp: Swapping', function ([owner, controller, tokenHolder, unknown]) {
         })
         assert.equal(logs[2].event, Events.Minted)
         assert.equal(logs[3].event, Events.Transfer)
-        assert.equal(logs[4].event, Events.Swap)
+        assert.equal(logs[4].event, Events.TransferByPartition)
+        assert.equal(logs[5].event, Events.Swap)
 
         const fxcHolderBalance = (
           await this.fxc.balanceOf.call(tokenHolder)
@@ -68,7 +68,8 @@ contract('Amp: Swapping', function ([owner, controller, tokenHolder, unknown]) {
         const { logs } = await this.amp.swap(tokenHolder, { from: unknown })
         assert.equal(logs[2].event, Events.Minted)
         assert.equal(logs[3].event, Events.Transfer)
-        assert.equal(logs[4].event, Events.Swap)
+        assert.equal(logs[4].event, Events.TransferByPartition)
+        assert.equal(logs[5].event, Events.Swap)
 
         const fxcHolderBalance = (
           await this.fxc.balanceOf.call(tokenHolder)

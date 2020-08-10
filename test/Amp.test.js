@@ -8,11 +8,11 @@ import {
   INames,
   assertEqualEvents,
   assertEqualEvent,
+  assertLogsContainEvent,
 } from './utils'
 import {
   Transfer,
   TransferByPartition,
-  ChangedPartition,
   Approval,
   ApprovalByPartition,
   AuthorizedOperator,
@@ -47,14 +47,11 @@ const {
 
 const {
   assertTransferEvent,
-  assertBalances,
   assertBalance,
   assertChangePartitionEvent,
 
   concatHexData,
 } = Helpers
-
-const partitions = [DEFAULT_PARTITION, ALT_PARTITION_1, ALT_PARTITION_2]
 
 const issuanceAmount = 1000
 
@@ -115,19 +112,6 @@ contract('Amp', function ([
             canImplement20
           )
         })
-      })
-      describe(`for ${INames.ERC777_INTERFACE_NAME}`, function () {
-        it('returns ERC1820_ACCEPT_MAGIC')
-        // async function () {
-        //   const canImplement20 = await this.amp.canImplementInterfaceForAddress(
-        //     soliditySha3(INames.ERC777_INTERFACE_NAME),
-        //     ZERO_ADDRESS
-        //   )
-        //   assert.equal(
-        //     soliditySha3(INames.ERC1820_ACCEPT_MAGIC),
-        //     canImplement20
-        //   )
-        // })
       })
     })
     describe('when interface hash is not correct', function () {
@@ -200,8 +184,10 @@ contract('Amp', function ([
           await this.amp.transferByPartition(
             DEFAULT_PARTITION,
             tokenHolder,
+            tokenHolder,
             issuanceAmount,
             concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+            ZERO_BYTE,
             { from: tokenHolder }
           )
           await this.harness.assertBalanceOfByPartition(
@@ -315,8 +301,10 @@ contract('Amp', function ([
               await this.amp.transferByPartition(
                 DEFAULT_PARTITION,
                 tokenHolder,
+                tokenHolder,
                 issuanceAmount,
                 concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
               await this.harness.assertBalanceOfByPartition(
@@ -429,8 +417,10 @@ contract('Amp', function ([
               await this.amp.transferByPartition(
                 DEFAULT_PARTITION,
                 tokenHolder,
+                tokenHolder,
                 issuanceAmount,
                 concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
               await this.harness.assertBalanceOfByPartition(
@@ -508,11 +498,15 @@ contract('Amp', function ([
           from: tokenHolder,
         })
 
-        assert.equal(logs.length, 1)
-        assert.equal(logs[0].event, 'Approval')
-        assert.equal(logs[0].args.owner, tokenHolder)
-        assert.equal(logs[0].args.spender, operator)
-        assert.equal(logs[0].args.value, amount)
+        assert.equal(logs.length, 2)
+        assertLogsContainEvent(logs, {
+          name: Approval,
+          values: {
+            owner: tokenHolder,
+            spender: operator,
+            value: amount,
+          },
+        })
       })
     })
     describe('when the operator to approve is the zero address', function () {
@@ -556,11 +550,14 @@ contract('Amp', function ([
           }
         )
 
-        assert.equal(logs.length, 1)
-        assertEqualEvent(logs[0], Approval, {
-          owner: tokenHolder,
-          spender: operator,
-          value: totalAmount,
+        assert.equal(logs.length, 2)
+        assertLogsContainEvent(logs, {
+          name: Approval,
+          values: {
+            owner: tokenHolder,
+            spender: operator,
+            value: totalAmount,
+          },
         })
       })
     })
@@ -605,11 +602,14 @@ contract('Amp', function ([
           }
         )
 
-        assert.equal(logs.length, 1)
-        assertEqualEvent(logs[0], Approval, {
-          owner: tokenHolder,
-          spender: operator,
-          value: totalAmount,
+        assert.equal(logs.length, 2)
+        assertLogsContainEvent(logs, {
+          name: Approval,
+          values: {
+            owner: tokenHolder,
+            spender: operator,
+            value: totalAmount,
+          },
         })
       })
     })
@@ -670,335 +670,6 @@ contract('Amp', function ([
     })
   })
 
-  describe('transferWithData', function () {
-    beforeEach(async function () {
-      this.amp = await this.harness.init()
-      await this.harness.mockSwap(tokenHolder, issuanceAmount, [
-        ALT_PARTITION_1,
-        ALT_PARTITION_2,
-      ])
-    })
-
-    describe('when the recipient is not the zero address', function () {
-      describe('when the sender has enough balance in the default partition', function () {
-        describe('when the sender does not use data', function () {
-          it('transfers the requested amount', async function () {
-            await this.harness.assertBalances(tokenHolder, partitions, [
-              issuanceAmount,
-              issuanceAmount,
-              issuanceAmount,
-            ])
-
-            await this.amp.transferWithData(
-              recipient,
-              1 * issuanceAmount,
-              ZERO_BYTES32,
-              { from: tokenHolder }
-            )
-
-            await this.harness.assertBalances(tokenHolder, partitions, [
-              0,
-              issuanceAmount,
-              issuanceAmount,
-            ])
-            await this.harness.assertBalances(recipient, partitions, [
-              issuanceAmount,
-              0,
-              0,
-            ])
-          })
-        })
-        describe('when the sender uses data to switch partitions', function () {
-          it('transfers the request amount to the changed partition', async function () {
-            await this.harness.assertBalances(tokenHolder, partitions, [
-              issuanceAmount,
-              issuanceAmount,
-              issuanceAmount,
-            ])
-
-            await this.amp.transferWithData(
-              recipient,
-              issuanceAmount,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
-              { from: tokenHolder }
-            )
-
-            await this.harness.assertBalances(tokenHolder, partitions, [
-              0,
-              issuanceAmount,
-              issuanceAmount,
-            ])
-            await this.harness.assertBalances(recipient, partitions, [
-              0,
-              issuanceAmount,
-              0,
-            ])
-          })
-
-          it('emits transfers event logs', async function () {
-            const data = concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1)
-            const { logs } = await this.amp.transferWithData(
-              recipient,
-              issuanceAmount,
-              data,
-              { from: tokenHolder }
-            )
-
-            assertEqualEvents(logs, [
-              {
-                name: Transfer,
-                values: {
-                  from: tokenHolder,
-                  to: recipient,
-                  value: issuanceAmount,
-                },
-              },
-              {
-                name: TransferByPartition,
-                values: {
-                  fromPartition: DEFAULT_PARTITION,
-                  operator: tokenHolder,
-                  from: tokenHolder,
-                  to: recipient,
-                  value: issuanceAmount,
-                  data: data,
-                  operatorData: null,
-                },
-              },
-              {
-                name: ChangedPartition,
-                values: {
-                  fromPartition: DEFAULT_PARTITION,
-                  toPartition: ALT_PARTITION_1,
-                  value: issuanceAmount,
-                },
-              },
-            ])
-          })
-        })
-      })
-
-      describe('when the sender does not have enough balance in the default partition', function () {
-        it('reverts', async function () {
-          await shouldFail.reverting(
-            this.amp.transferWithData(
-              recipient,
-              1.5 * issuanceAmount,
-              ZERO_BYTES32,
-              { from: tokenHolder }
-            )
-          )
-        })
-      })
-    })
-    describe('when the recipient is the zero address', function () {
-      it('reverts', async function () {
-        await assertBalances(this.amp, tokenHolder, partitions, [
-          issuanceAmount,
-          issuanceAmount,
-          issuanceAmount,
-        ])
-
-        await shouldFail.reverting(
-          this.amp.transferWithData(
-            ZERO_ADDRESS,
-            1 * issuanceAmount,
-            ZERO_BYTES32,
-            { from: tokenHolder }
-          )
-        )
-      })
-    })
-  })
-
-  describe('transferFromWithData', function () {
-    beforeEach(async function () {
-      this.amp = await this.harness.init()
-      await this.harness.mockSwap(tokenHolder, issuanceAmount, [
-        ALT_PARTITION_1,
-        ALT_PARTITION_2,
-      ])
-    })
-    describe('when the operator is approved', function () {
-      beforeEach(async function () {
-        await this.amp.authorizeOperator(operator, { from: tokenHolder })
-      })
-
-      describe('when the recipient is not the zero address', function () {
-        describe('when the sender has enough balance in the default partition', function () {
-          describe('when the sender does not use data', function () {
-            it('transfers the requested amount', async function () {
-              await assertBalances(this.amp, tokenHolder, partitions, [
-                issuanceAmount,
-                issuanceAmount,
-                issuanceAmount,
-              ])
-
-              await this.amp.transferFromWithData(
-                tokenHolder,
-                recipient,
-                1 * issuanceAmount,
-                ZERO_BYTES32,
-                { from: operator }
-              )
-
-              await assertBalances(this.amp, tokenHolder, partitions, [
-                0,
-                issuanceAmount,
-                issuanceAmount,
-              ])
-              await assertBalances(this.amp, recipient, partitions, [
-                issuanceAmount,
-                0,
-                0,
-              ])
-            })
-            it('emits a sent event', async function () {
-              const { logs } = await this.amp.transferFromWithData(
-                tokenHolder,
-                recipient,
-                1 * issuanceAmount,
-                ZERO_BYTES32,
-                { from: operator }
-              )
-
-              assert.equal(logs.length, 2)
-
-              assertTransferEvent(
-                [logs[0], logs[1]],
-
-                DEFAULT_PARTITION,
-                operator,
-                tokenHolder,
-                recipient,
-                issuanceAmount,
-                ZERO_BYTES32,
-                null
-              )
-            })
-          })
-          describe('when the sender uses data to change partitions', function () {
-            const data = concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1)
-            it('transfers the request amount to the changed partition', async function () {
-              await this.harness.assertBalances(tokenHolder, partitions, [
-                issuanceAmount,
-                issuanceAmount,
-                issuanceAmount,
-              ])
-
-              await this.amp.transferFromWithData(
-                tokenHolder,
-                recipient,
-                issuanceAmount,
-                data,
-                { from: operator }
-              )
-
-              await this.harness.assertBalances(tokenHolder, partitions, [
-                0,
-                issuanceAmount,
-                issuanceAmount,
-              ])
-              await this.harness.assertBalances(recipient, partitions, [
-                0,
-                issuanceAmount,
-                0,
-              ])
-            })
-
-            it('emits transfers event logs', async function () {
-              const { logs } = await this.amp.transferFromWithData(
-                tokenHolder,
-                recipient,
-                issuanceAmount,
-                data,
-                { from: operator }
-              )
-
-              assertEqualEvents(logs, [
-                {
-                  name: Transfer,
-                  values: {
-                    from: tokenHolder,
-                    to: recipient,
-                    value: issuanceAmount,
-                  },
-                },
-                {
-                  name: TransferByPartition,
-                  values: {
-                    fromPartition: DEFAULT_PARTITION,
-                    operator: operator,
-                    from: tokenHolder,
-                    to: recipient,
-                    value: issuanceAmount,
-                    data: data,
-                    operatorData: null,
-                  },
-                },
-                {
-                  name: ChangedPartition,
-                  values: {
-                    fromPartition: DEFAULT_PARTITION,
-                    toPartition: ALT_PARTITION_1,
-                    value: issuanceAmount,
-                  },
-                },
-              ])
-            })
-          })
-        })
-
-        describe('when the sender does not have enough balance in the default partition', function () {
-          it('reverts', async function () {
-            await shouldFail.reverting(
-              this.amp.transferFromWithData(
-                tokenHolder,
-                recipient,
-                1.5 * issuanceAmount,
-                ZERO_BYTES32,
-                { from: operator }
-              )
-            )
-          })
-        })
-      })
-      describe('when the recipient is the zero address', function () {
-        it('reverts', async function () {
-          await assertBalances(this.amp, tokenHolder, partitions, [
-            issuanceAmount,
-            issuanceAmount,
-            issuanceAmount,
-          ])
-
-          await shouldFail.reverting(
-            this.amp.transferFromWithData(
-              tokenHolder,
-              ZERO_ADDRESS,
-              1 * issuanceAmount,
-              ZERO_BYTES32,
-              { from: operator }
-            )
-          )
-        })
-      })
-    })
-
-    describe('when the operator is not approved', function () {
-      it('reverts', async function () {
-        await shouldFail.reverting(
-          this.amp.transferFromWithData(
-            tokenHolder,
-            recipient,
-            1 * issuanceAmount,
-            ZERO_BYTES32,
-            { from: operator }
-          )
-        )
-      })
-    })
-  })
-
   describe('transferByPartition', function () {
     const transferAmount = 300
 
@@ -1007,214 +678,225 @@ contract('Amp', function ([
       await this.harness.mockSwap(tokenHolder, issuanceAmount)
     })
 
-    describe('when the sender has enough balance for this partition', function () {
-      describe('when the transfer amount is not equal to 0', function () {
-        describe('when the sender does not change the partition', function () {
-          it('transfers the requested amount', async function () {
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
+    describe('when the sender is transferring from itself', function () {
+      describe('when the sender has enough balance for this partition', function () {
+        describe('when the transfer amount is not equal to 0', function () {
+          describe('when the sender does not change the partition', function () {
+            it('transfers the requested amount', async function () {
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                issuanceAmount
+              )
+
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                recipient,
+                0
+              )
+
+              await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                ZERO_BYTES32,
+                ZERO_BYTES32,
+                { from: tokenHolder }
+              )
+              await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                0,
+                ZERO_BYTES32,
+                ZERO_BYTES32,
+                { from: tokenHolder }
+              )
+
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                issuanceAmount - transferAmount
+              )
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                recipient,
+                transferAmount
+              )
+            })
+
+            it('emits a TransferByPartition event', async function () {
+              const {
+                logs,
+              } = await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                ZERO_BYTES32,
+                ZERO_BYTE,
+                { from: tokenHolder }
+              )
+
+              assert.equal(logs.length, 2)
+
+              assertTransferEvent(
+                logs,
+
+                DEFAULT_PARTITION,
+                tokenHolder,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                ZERO_BYTES32,
+                null
+              )
+            })
+          })
+
+          describe('when the sender changes the partition', function () {
+            it('transfers the requested amount', async function () {
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                issuanceAmount
+              )
+
+              await this.harness.assertBalanceOfByPartition(
+                ALT_PARTITION_1,
+                recipient,
+                0
+              )
+
+              await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
+                { from: tokenHolder }
+              )
+              await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                0,
+                concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
+                { from: tokenHolder }
+              )
+
+              await this.harness.assertBalanceOfByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                issuanceAmount - transferAmount
+              )
+              await this.harness.assertBalanceOfByPartition(
+                ALT_PARTITION_1,
+                recipient,
+                transferAmount
+              )
+            })
+            it('emits a TransferByPartition event', async function () {
+              const {
+                logs,
+              } = await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
+                { from: tokenHolder }
+              )
+
+              assert.equal(logs.length, 3)
+
+              assertTransferEvent(
+                logs,
+
+                DEFAULT_PARTITION,
+                tokenHolder,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                null
+              )
+            })
+            it('emits a ChangedPartition event', async function () {
+              const {
+                logs,
+              } = await this.amp.transferByPartition(
+                DEFAULT_PARTITION,
+                tokenHolder,
+                recipient,
+                transferAmount,
+                concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+                ZERO_BYTE,
+                { from: tokenHolder }
+              )
+
+              assert.equal(logs.length, 3)
+
+              assertChangePartitionEvent(
+                logs,
+                DEFAULT_PARTITION,
+                ALT_PARTITION_1,
+                transferAmount
+              )
+            })
+          })
+        })
+        describe('when the transfer amount is equal to 0', function () {
+          it('succeeds (with no tokens being transferred), as the params and data can be used by hooks', async function () {
+            const holderBalance = await this.amp.balanceOfByPartition(
+              ALT_PARTITION_1,
+              tokenHolder
+            )
+            const recipientBalance = await this.amp.balanceOfByPartition(
+              ALT_PARTITION_1,
+              recipient
+            )
+
+            await this.amp.transferByPartition(
+              ALT_PARTITION_1,
               tokenHolder,
-              issuanceAmount
-            )
-
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              0
-            )
-
-            await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount,
-              ZERO_BYTES32,
-              { from: tokenHolder }
-            )
-            await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
               recipient,
               0,
               ZERO_BYTES32,
+              ZERO_BYTE,
               { from: tokenHolder }
             )
 
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
-              tokenHolder,
-              issuanceAmount - transferAmount
+            assert.equal(
+              await this.amp.balanceOfByPartition(ALT_PARTITION_1, tokenHolder),
+              Number(holderBalance)
             )
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount
+            assert.equal(
+              await this.amp.balanceOfByPartition(ALT_PARTITION_1, recipient),
+              Number(recipientBalance)
             )
           })
-
-          it('emits a TransferByPartition event', async function () {
-            const {
-              logs,
-            } = await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount,
-              ZERO_BYTES32,
-              { from: tokenHolder }
-            )
-
-            assert.equal(logs.length, 2)
-
-            assertTransferEvent(
-              logs,
-
-              DEFAULT_PARTITION,
-              tokenHolder,
+        })
+      })
+      describe('when the sender does not have enough balance for this partition', function () {
+        it('reverts', async function () {
+          await shouldFail.reverting(
+            this.amp.transferByPartition(
+              ALT_PARTITION_1,
               tokenHolder,
               recipient,
               transferAmount,
               ZERO_BYTES32,
-              null
-            )
-          })
-        })
-
-        describe('when the sender changes the partition', function () {
-          it('transfers the requested amount', async function () {
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
-              tokenHolder,
-              issuanceAmount
-            )
-
-            await this.harness.assertBalanceOfByPartition(
-              ALT_PARTITION_1,
-              recipient,
-              0
-            )
-
-            await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
-            await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              0,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
-              { from: tokenHolder }
-            )
-
-            await this.harness.assertBalanceOfByPartition(
-              DEFAULT_PARTITION,
-              tokenHolder,
-              issuanceAmount - transferAmount
-            )
-            await this.harness.assertBalanceOfByPartition(
-              ALT_PARTITION_1,
-              recipient,
-              transferAmount
-            )
-          })
-          it('emits a TransferByPartition event', async function () {
-            const {
-              logs,
-            } = await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
-              { from: tokenHolder }
-            )
-
-            assert.equal(logs.length, 3)
-
-            assertTransferEvent(
-              logs,
-
-              DEFAULT_PARTITION,
-              tokenHolder,
-              tokenHolder,
-              recipient,
-              transferAmount,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
-              null
-            )
-          })
-          it('emits a ChangedPartition event', async function () {
-            const {
-              logs,
-            } = await this.amp.transferByPartition(
-              DEFAULT_PARTITION,
-              recipient,
-              transferAmount,
-              concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
-              { from: tokenHolder }
-            )
-
-            assert.equal(logs.length, 3)
-
-            assertChangePartitionEvent(
-              logs,
-              DEFAULT_PARTITION,
-              ALT_PARTITION_1,
-              transferAmount
-            )
-          })
-        })
-      })
-      describe('when the transfer amount is equal to 0', function () {
-        it('succeeds (with no tokens being transferred), as the params and data can be used by hooks', async function () {
-          const holderBalance = await this.amp.balanceOfByPartition(
-            ALT_PARTITION_1,
-            tokenHolder
-          )
-          const recipientBalance = await this.amp.balanceOfByPartition(
-            ALT_PARTITION_1,
-            recipient
-          )
-
-          await this.amp.transferByPartition(
-            ALT_PARTITION_1,
-            recipient,
-            0,
-            ZERO_BYTES32,
-            { from: tokenHolder }
-          )
-
-          assert.equal(
-            await this.amp.balanceOfByPartition(ALT_PARTITION_1, tokenHolder),
-            Number(holderBalance)
-          )
-          assert.equal(
-            await this.amp.balanceOfByPartition(ALT_PARTITION_1, recipient),
-            Number(recipientBalance)
           )
         })
       })
-    })
-    describe('when the sender does not have enough balance for this partition', function () {
-      it('reverts', async function () {
-        await shouldFail.reverting(
-          this.amp.transferByPartition(
-            ALT_PARTITION_1,
-            recipient,
-            transferAmount,
-            ZERO_BYTES32,
-            { from: tokenHolder }
-          )
-        )
-      })
-    })
-  })
-
-  describe('operatorTransferByPartition', function () {
-    const transferAmount = 300
-
-    beforeEach(async function () {
-      this.amp = await this.harness.init()
-      await this.harness.mockSwap(tokenHolder, issuanceAmount)
     })
 
     describe('when the sender is approved for this partition', function () {
@@ -1255,7 +937,7 @@ contract('Amp', function ([
             ),
             approvedAmount
           )
-          await this.amp.operatorTransferByPartition(
+          await this.amp.transferByPartition(
             DEFAULT_PARTITION,
             tokenHolder,
             recipient,
@@ -1324,7 +1006,7 @@ contract('Amp', function ([
             approvedAmount
           )
           await shouldFail.reverting(
-            this.amp.operatorTransferByPartition(
+            this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1358,7 +1040,7 @@ contract('Amp', function ([
               operator,
               { from: tokenHolder }
             )
-            await this.amp.operatorTransferByPartition(
+            await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1397,7 +1079,7 @@ contract('Amp', function ([
               operator,
               { from: tokenHolder }
             )
-            await this.amp.operatorTransferByPartition(
+            await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1427,7 +1109,7 @@ contract('Amp', function ([
             )
             const {
               logs,
-            } = await this.amp.operatorTransferByPartition(
+            } = await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1470,7 +1152,7 @@ contract('Amp', function ([
               operator,
               { from: tokenHolder }
             )
-            await this.amp.operatorTransferByPartition(
+            await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1493,7 +1175,6 @@ contract('Amp', function ([
           })
           it('converts the requested amount', async function () {
             await this.harness.assertBalanceOf(tokenHolder, issuanceAmount)
-            await this.harness.assertTotalBalanceOf(tokenHolder, issuanceAmount)
             await this.harness.assertBalanceOfByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
@@ -1510,7 +1191,7 @@ contract('Amp', function ([
               operator,
               { from: tokenHolder }
             )
-            await this.amp.operatorTransferByPartition(
+            await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               tokenHolder,
@@ -1520,11 +1201,10 @@ contract('Amp', function ([
               { from: operator }
             )
 
-            await this.harness.assertTotalBalanceOf(tokenHolder, issuanceAmount)
+            await this.harness.assertBalanceOf(tokenHolder, issuanceAmount)
             await this.harness.assertBalanceOfByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
-
               issuanceAmount - transferAmount
             )
             await this.harness.assertBalanceOfByPartition(
@@ -1541,7 +1221,7 @@ contract('Amp', function ([
             )
             const {
               logs,
-            } = await this.amp.operatorTransferByPartition(
+            } = await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1583,7 +1263,7 @@ contract('Amp', function ([
             )
 
             await shouldFail.reverting(
-              this.amp.operatorTransferByPartition(
+              this.amp.transferByPartition(
                 DEFAULT_PARTITION,
                 tokenHolder,
                 recipient,
@@ -1606,7 +1286,7 @@ contract('Amp', function ([
             }
           )
           await shouldFail.reverting(
-            this.amp.operatorTransferByPartition(
+            this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
               recipient,
@@ -1625,7 +1305,7 @@ contract('Amp', function ([
         await this.harness.assertBalanceOf(recipient, 0)
 
         await this.amp.authorizeOperator(operator, { from: tokenHolder })
-        await this.amp.operatorTransferByPartition(
+        await this.amp.transferByPartition(
           DEFAULT_PARTITION,
           tokenHolder,
           recipient,
@@ -1645,7 +1325,7 @@ contract('Amp', function ([
     describe('when the sender is neither an operator, nor approved', function () {
       it('reverts', async function () {
         await shouldFail.reverting(
-          this.amp.operatorTransferByPartition(
+          this.amp.transferByPartition(
             DEFAULT_PARTITION,
             tokenHolder,
             recipient,
@@ -1910,8 +1590,10 @@ contract('Amp', function ([
       await this.harness.mockSwap(tokenHolder, issuanceAmount)
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
+        tokenHolder,
         recipient,
         issuanceAmount,
+        ZERO_BYTE,
         ZERO_BYTE,
         { from: tokenHolder }
       )
@@ -1926,9 +1608,11 @@ contract('Amp', function ([
       await this.harness.mockSwap(tokenHolder, issuanceAmount)
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
+        tokenHolder,
         recipient,
         issuanceAmount,
         concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
 
@@ -1943,9 +1627,11 @@ contract('Amp', function ([
       await this.harness.mockSwap(tokenHolder, issuanceAmount)
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
+        tokenHolder,
         recipient,
         issuanceAmount,
         concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
 
@@ -1957,9 +1643,11 @@ contract('Amp', function ([
 
       await this.amp.transferByPartition(
         ALT_PARTITION_1,
+        recipient,
         tokenHolder,
         issuanceAmount,
         concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
+        ZERO_BYTE,
         { from: recipient }
       )
 
@@ -1989,19 +1677,25 @@ contract('Amp', function ([
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
         tokenHolder,
+        tokenHolder,
         issuanceAmount,
         concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_1),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
       await this.amp.transferByPartition(
         ALT_PARTITION_1,
+        tokenHolder,
         recipient,
         issuanceAmount / 2,
         concatHexData(FLAG_CHANGE_PARTITION, ALT_PARTITION_2),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
 
-      const defaultSupply = await this.amp.totalSupplyByPartition(DEFAULT_PARTITION)
+      const defaultSupply = await this.amp.totalSupplyByPartition(
+        DEFAULT_PARTITION
+      )
       const alt1Supply = await this.amp.totalSupplyByPartition(ALT_PARTITION_1)
       const alt2Supply = await this.amp.totalSupplyByPartition(ALT_PARTITION_2)
 
@@ -2039,14 +1733,75 @@ contract('Amp', function ([
           ALT_PARTITION_1,
         ])
       })
-      it('returns the amount of tokens in the default partition', async function () {
+      it('returns the total amount of tokens in both partitions', async function () {
         const balance = await this.amp.balanceOf(tokenHolder)
+        assert.equal(balance, 2 * issuanceAmount)
+      })
+    })
+  })
+
+  describe('balanceOfByPartition', function () {
+    beforeEach(async function () {
+      this.amp = await this.harness.init()
+    })
+
+    describe('when the requested account has no tokens', function () {
+      it('returns 0 for the default partition', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          DEFAULT_PARTITION,
+          unknown
+        )
+        assert.equal(balance, 0)
+      })
+
+      it('returns 0 for other partitions', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          ALT_PARTITION_1,
+          unknown
+        )
+        assert.equal(balance, 0)
+      })
+    })
+
+    describe('when the requested account has some tokens in the default partition', function () {
+      beforeEach(async function () {
+        await this.harness.mockSwap(tokenHolder, issuanceAmount)
+      })
+      it('returns the issued amount of tokens for the default partition', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          DEFAULT_PARTITION,
+          tokenHolder
+        )
         assert.equal(balance, issuanceAmount)
       })
-      it('also returns the total amount in both partitions when calling totalBalanceOf', async function () {
-        // Also check the total balance to show the user has tokens in other partitions
-        const totalBalance = await this.amp.totalBalanceOf(tokenHolder)
-        assert.equal(totalBalance, 2 * issuanceAmount)
+      it('returns 0 tokens for the alternate partition', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          ALT_PARTITION_1,
+          tokenHolder
+        )
+        assert.equal(balance, 0)
+      })
+    })
+
+    describe('when the requested account has some tokens in multiple partitions', function () {
+      beforeEach(async function () {
+        await this.harness.mockSwap(tokenHolder, issuanceAmount, [
+          ALT_PARTITION_1,
+        ])
+      })
+      it('returns the issued amount of tokens for the default partition', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          DEFAULT_PARTITION,
+          tokenHolder
+        )
+        assert.equal(balance, issuanceAmount)
+      })
+      it('returns 0 tokens for the alternate partition', async function () {
+        const balance = await this.amp.balanceOfByPartition(
+          ALT_PARTITION_1,
+          tokenHolder
+        )
+        assert.equal(balance, issuanceAmount)
       })
     })
   })
@@ -2124,7 +1879,7 @@ contract('Amp', function ([
       this.amp = await this.harness.init()
     })
     it('returns the default partition', async function () {
-      const defaultPartition = await this.amp.getDefaultPartition()
+      const defaultPartition = await this.amp.defaultPartition()
       assert.equal(defaultPartition, DEFAULT_PARTITION)
     })
   })
@@ -2134,7 +1889,7 @@ contract('Amp', function ([
     beforeEach(async function () {
       this.amp = await this.harness.init()
     })
-    describe('when sender approves an operator for a given partition', function () {
+    describe('when sender approves an operator for the default partition', function () {
       it('approves the operator', async function () {
         assert.equal(
           await this.amp.allowanceByPartition(
@@ -2166,9 +1921,55 @@ contract('Amp', function ([
           { from: tokenHolder }
         )
 
-        assert.equal(logs.length, 1)
+        assert.equal(logs.length, 2)
         assertEqualEvent(logs[0], ApprovalByPartition, {
           partition: DEFAULT_PARTITION,
+          owner: tokenHolder,
+          spender: operator,
+          value: amount,
+        })
+        assertEqualEvent(logs[1], Approval, {
+          owner: tokenHolder,
+          spender: operator,
+          value: amount,
+        })
+      })
+    })
+    describe('when sender approves an operator for a non default partition', function () {
+      it('approves the operator', async function () {
+        assert.equal(
+          await this.amp.allowanceByPartition(
+            ALT_PARTITION_1,
+            tokenHolder,
+            operator
+          ),
+          0
+        )
+
+        await this.amp.approveByPartition(ALT_PARTITION_1, operator, amount, {
+          from: tokenHolder,
+        })
+
+        assert.equal(
+          await this.amp.allowanceByPartition(
+            ALT_PARTITION_1,
+            tokenHolder,
+            operator
+          ),
+          amount
+        )
+      })
+      it('emits an approval event', async function () {
+        const { logs } = await this.amp.approveByPartition(
+          ALT_PARTITION_1,
+          operator,
+          amount,
+          { from: tokenHolder }
+        )
+
+        assert.equal(logs.length, 1)
+        assertEqualEvent(logs[0], ApprovalByPartition, {
+          partition: ALT_PARTITION_1,
           owner: tokenHolder,
           spender: operator,
           value: amount,

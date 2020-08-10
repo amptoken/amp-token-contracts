@@ -68,8 +68,10 @@ contract('HolderCollateralPartitionValidator', function ([
           this.amp.transferByPartition(
             DEFAULT_PARTITION,
             tokenHolder,
+            tokenHolder,
             supplyAmount,
             changeToCMPartition,
+            ZERO_BYTE,
             { from: tokenHolder }
           )
         )
@@ -98,8 +100,10 @@ contract('HolderCollateralPartitionValidator', function ([
             await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
+              tokenHolder,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
           })
@@ -135,9 +139,11 @@ contract('HolderCollateralPartitionValidator', function ([
             await shouldFail.reverting(
               this.amp.transferByPartition(
                 DEFAULT_PARTITION,
+                tokenHolder,
                 this.manager.address,
                 supplyAmount,
                 concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+                ZERO_BYTE,
                 { from: tokenHolder }
               )
             )
@@ -155,8 +161,10 @@ contract('HolderCollateralPartitionValidator', function ([
             await this.amp.transferByPartition(
               DEFAULT_PARTITION,
               tokenHolder,
+              tokenHolder,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, collateralPartitionOther),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
 
@@ -175,10 +183,13 @@ contract('HolderCollateralPartitionValidator', function ([
 
         describe(`to the holder2 address and a manager collateral partition `, function () {
           it('succeeds', async function () {
-            await this.amp.transferWithData(
+            await this.amp.transferByPartition(
+              DEFAULT_PARTITION,
+              tokenHolder,
               holder2,
               supplyAmount,
               concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+              ZERO_BYTE,
               { from: tokenHolder }
             )
 
@@ -217,8 +228,10 @@ contract('HolderCollateralPartitionValidator', function ([
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
         tokenHolder,
+        tokenHolder,
         supplyAmount,
         concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
     })
@@ -261,7 +274,7 @@ contract('HolderCollateralPartitionValidator', function ([
           0
         )
 
-        await this.amp.operatorTransferByPartition(
+        await this.amp.transferByPartition(
           this.collateralPartition,
           tokenHolder,
           this.manager.address,
@@ -285,20 +298,24 @@ contract('HolderCollateralPartitionValidator', function ([
           this.amp.transferByPartition(
             this.collateralPartition,
             tokenHolder,
+            tokenHolder,
             supplyAmount,
             concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
+            ZERO_BYTE,
             { from: tokenHolder }
           )
         )
       })
       it('succeeds with appropriate data', async function () {
-        await this.amp.operatorTransferByPartition(
+        const VALID_DATA = web3.eth.abi.encodeParameters(['bytes2'], ['0x1111'])
+
+        await this.amp.transferByPartition(
           this.collateralPartition,
           tokenHolder,
           tokenHolder,
           supplyAmount,
           concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
-          '0x1111',
+          VALID_DATA,
           { from: tokenHolder }
         )
 
@@ -330,8 +347,10 @@ contract('HolderCollateralPartitionValidator', function ([
       await this.amp.transferByPartition(
         DEFAULT_PARTITION,
         tokenHolder,
+        tokenHolder,
         supplyAmount,
         concatHexData(FLAG_CHANGE_PARTITION, this.collateralPartition),
+        ZERO_BYTE,
         { from: tokenHolder }
       )
     })
@@ -374,7 +393,7 @@ contract('HolderCollateralPartitionValidator', function ([
           0
         )
 
-        await this.amp.operatorTransferByPartition(
+        await this.amp.transferByPartition(
           this.collateralPartition,
           tokenHolder,
           this.manager.address,
@@ -398,20 +417,24 @@ contract('HolderCollateralPartitionValidator', function ([
           this.amp.transferByPartition(
             this.collateralPartition,
             tokenHolder,
+            tokenHolder,
             supplyAmount,
             concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
+            ZERO_BYTE,
             { from: tokenHolder }
           )
         )
       })
       it('succeeds with appropriate data', async function () {
-        await this.amp.operatorTransferByPartition(
+        const VALID_DATA = web3.eth.abi.encodeParameters(['bytes2'], ['0x1111'])
+
+        await this.amp.transferByPartition(
           this.collateralPartition,
           tokenHolder,
           tokenHolder,
           supplyAmount,
           concatHexData(FLAG_CHANGE_PARTITION, DEFAULT_PARTITION),
-          '0x1111',
+          VALID_DATA,
           { from: tokenHolder }
         )
 
