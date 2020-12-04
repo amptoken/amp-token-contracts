@@ -19,13 +19,10 @@ contract ERC1820Implementer {
     mapping(bytes32 => bool) internal _interfaceHashes;
 
     /**
-     * @notice Indicates whether the contract implements the interface `_interfaceHash`
-     * for the address `_addr`.
+     * @notice Indicates whether the contract implements the interface `_interfaceHash`.
      * @param _interfaceHash keccak256 hash of the name of the interface.
-     * @return ERC1820_ACCEPT_MAGIC only if the contract implements `ìnterfaceHash`
-     * for the address `_addr`.
-     * @dev In this implementation, the `_addr` (the address for which the
-     * contract will implement the interface) is always `address(this)`.
+     * @return bytes32 containing the ERC-1820 "accept magic" string if the contract implements
+     * `_ìnterfaceHash`.
      */
     function canImplementInterfaceForAddress(
         bytes32 _interfaceHash,

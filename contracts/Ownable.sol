@@ -32,7 +32,7 @@ contract Ownable {
 
     /**
      * @notice Retrieves the owner of the contract
-     * @return The contract owner
+     * @return address containing the contract owner.
      */
     function owner() public view returns (address) {
         return _owner;
@@ -40,7 +40,7 @@ contract Ownable {
 
     /**
      * @notice Retrieves the authorized new owner of the contract
-     * @return The authorized new contract owner
+     * @return address containing the authorized new contract owner.
      */
     function authorizedNewOwner() public view returns (address) {
         return _authorizedNewOwner;
@@ -48,7 +48,9 @@ contract Ownable {
 
     /**
      * @notice Authorizes the transfer of ownership from owner to the provided address.
-     * NOTE: No transfer will occur unless authorizedAddress calls assumeOwnership().
+     * @dev Note that the transfer will not occur until `_authorizedAddress` calls function
+     * `Amp.assumeOwnership`.
+     * 
      * This authorization may be removed by another call to this function authorizing the zero
      * address.
      * @param _authorizedAddress The address authorized to become the new owner
@@ -62,8 +64,7 @@ contract Ownable {
     }
 
     /**
-     * @notice Transfers ownership of this contract to the _authorizedNewOwner
-     * @dev Error invalid sender.
+     * @notice Transfers ownership of this contract to the authorized new owner.
      */
     function assumeOwnership() external {
         require(msg.sender == _authorizedNewOwner, "Invalid sender");

@@ -39,7 +39,7 @@ interface ISwapToken {
  *
  * Partitions
  *   Tokens can be segmented within a given address by "partition", which in
- *   pracice is a 32 byte identifier. These partitions can have unique
+ *   practice is a 32 byte identifier. These partitions can have unique
  *   permissions globally, through the using of partition strategies, and
  *   locally, on a per address basis. The ability to create the sub-segments
  *   of tokens and assign special behavior gives collateral managers
@@ -116,7 +116,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     string internal _name;
 
     /**
-     * @dev Token symbol (AMP).
+     * @dev Token symbol (Amp).
      */
     string internal _symbol;
 
@@ -183,7 +183,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
         public constant defaultPartition = 0x0000000000000000000000000000000000000000000000000000000000000000;
 
     /**
-     * @dev Zero partition prefix. Parititions with this prefix can not have
+     * @dev Zero partition prefix. Partitions with this prefix can not have
      * a strategy assigned, and partitions with a different prefix must have one.
      */
     bytes4 internal constant ZERO_PREFIX = 0x00000000;
@@ -263,16 +263,16 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
 
     /**
      * @notice Emitted when a transfer has been successfully completed.
-     * @param fromPartition The partition the tokens were transfered from.
+     * @param fromPartition The partition from which tokens were transferred.
      * @param operator The address that initiated the transfer.
-     * @param from The address the tokens were transferred from.
-     * @param to The address the tokens were transferred to.
+     * @param from The address from which the tokens were transferred.
+     * @param to The address to which the tokens were transferred.
      * @param value The amount of tokens transferred.
      * @param data Additional metadata included with the transfer. Can include
-     * the partition the tokens were transferred to (if different than
-     * `fromPartition`).
-     * @param operatorData Additional metadata included with the transfer on
-     * behalf of the operator.
+     * the partition to which the tokens were transferred, if different than
+     * `fromPartition`.
+     * @param operatorData Additional metadata included with the transfer. Typically used by
+     * partition strategies and collateral managers to authorize transfers.
      */
     event TransferByPartition(
         bytes32 indexed fromPartition,
@@ -287,8 +287,8 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**
      * @notice Emitted when a transfer has been successfully completed and the
      * tokens that were transferred have changed partitions.
-     * @param fromPartition The partition the tokens were transfered from.
-     * @param toPartition The partition the tokens were transfered to.
+     * @param fromPartition The partition from which the tokens were transferred.
+     * @param toPartition The partition to which the tokens were transferred.
      * @param value The amount of tokens transferred.
      */
     event ChangedPartition(
@@ -301,12 +301,13 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************** Operator Events *****************************/
 
     /**
-     * @notice Emitted when a token holder specifies an amount of tokens in a
-     * a partition that an operator can transfer.
-     * @param partition The partition of the tokens the holder has authorized the
-     * operator to transfer from.
+     * @notice Emitted when a token holder authorizes an address to transfer tokens on its behalf
+     * from a particular partition.
+     * @param partition The partition of the tokens from which the holder has authorized the
+     * `spender` to transfer.
      * @param owner The token holder.
-     * @param spender The operator the `owner` has authorized the allowance for.
+     * @param spender The operator for which the `owner` has authorized the allowance.
+     * @param value The amount of tokens authorized for transfer.
      */
     event ApprovalByPartition(
         bytes32 indexed partition,
@@ -316,9 +317,8 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     );
 
     /**
-     * @notice Emitted when a token holder has authorized an operator for their
-     * tokens.
-     * @dev This event applies to the token holder address across all partitions.
+     * @notice Emitted when a token holder has authorized an operator to transfer tokens on the
+     * behalf of the holder across all partitions.
      * @param operator The address that was authorized to transfer tokens on
      * behalf of the `tokenHolder`.
      * @param tokenHolder The address that authorized the `operator` to transfer
@@ -327,25 +327,25 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     event AuthorizedOperator(address indexed operator, address indexed tokenHolder);
 
     /**
-     * @notice Emitted when a token holder has de-authorized an operator from
-     * transferring their tokens.
-     * @dev This event applies to the token holder address across all partitions.
-     * @param operator The address that was de-authorized from transferring tokens
+     * @notice Emitted when a token holder has deauthorized an operator from
+     * transferring tokens on behalf of the holder.
+     * @dev Note that this applies an account-wide authorization change, and does not reflect any
+     * change in the authorization for a particular partition.
+     * @param operator The address that was deauthorized from transferring tokens
      * on behalf of the `tokenHolder`.
-     * @param tokenHolder The address that revoked the `operator`'s permission
+     * @param tokenHolder The address that revoked the `operator`'s authorization
      * to transfer their tokens.
      */
     event RevokedOperator(address indexed operator, address indexed tokenHolder);
 
     /**
      * @notice Emitted when a token holder has authorized an operator to transfer
-     * their tokens of one partition.
-     * @param partition The partition the `operator` is allowed to transfer
-     * tokens from.
-     * @param operator The address that was authorized to transfer tokens on
+     * tokens on behalf of the holder from a particular partition.
+     * @param partition The partition from which the `operator` is authorized to transfer.
+     * @param operator The address authorized to transfer tokens on
      * behalf of the `tokenHolder`.
      * @param tokenHolder The address that authorized the `operator` to transfer
-     * their tokens in `partition`.
+     * tokens held in partition `partition`.
      */
     event AuthorizedOperatorByPartition(
         bytes32 indexed partition,
@@ -354,14 +354,14 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     );
 
     /**
-     * @notice Emitted when a token holder has de-authorized an operator from
-     * transferring their tokens from a specific partition.
-     * @param partition The partition the `operator` is no longer allowed to
-     * transfer tokens from on behalf of the `tokenHolder`.
-     * @param operator The address that was de-authorized from transferring
+     * @notice Emitted when a token holder has deauthorized an operator from
+     * transferring held tokens from a specific partition.
+     * @param partition The partition for which the `operator` was deauthorized for token transfer
+     * on behalf of the `tokenHolder`.
+     * @param operator The address that was deauthorized from transferring
      * tokens on behalf of the `tokenHolder`.
      * @param tokenHolder The address that revoked the `operator`'s permission
-     * to transfer their tokens from `partition`.
+     * to transfer held tokens from `partition`.
      */
     event RevokedOperatorByPartition(
         bytes32 indexed partition,
@@ -383,8 +383,8 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
 
     /**
      * @notice Emitted when a new partition strategy validator is set.
-     * @param flag The 4 byte prefix of the partitions that the stratgy affects.
-     * @param name The name of the partition strategy.
+     * @param flag The 4 byte prefix of the partitions that the strategy affects.
+     * @param name The name of the interface implemented by the partition strategy.
      * @param implementation The address of the partition strategy hook
      * implementation.
      */
@@ -393,20 +393,19 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     // ************** Mint & Swap **************
 
     /**
-     * @notice Emitted when tokens are minted as a result of a token swap
-     * @param operator Address that executed the swap that resulted in tokens being minted
+     * @notice Emitted when tokens are minted, which only occurs as the result of token swap.
+     * @param operator Address that executed the swap, resulting in tokens being minted
      * @param to Address that received the newly minted tokens.
-     * @param value Amount of tokens minted
-     * @param data Empty bytes, required for interface compatibility
+     * @param value Amount of tokens minted.
+     * @param data Additional metadata. Unused; required for interface compatibility.
      */
     event Minted(address indexed operator, address indexed to, uint256 value, bytes data);
 
     /**
-     * @notice Indicates tokens swapped for Amp.
-     * @dev The tokens that are swapped for Amp will be transferred to a
-     * graveyard address that is for all practical purposes inaccessible.
+     * @notice Emitted when tokens are swapped as part of the minting process.
      * @param operator Address that executed the swap.
-     * @param from Address that the tokens were swapped from, and Amp minted for.
+     * @param from Address whose source swap tokens were burned, and for which Amp tokens were
+     * minted.
      * @param value Amount of tokens swapped into Amp.
      */
     event Swap(address indexed operator, address indexed from, uint256 value);
@@ -418,10 +417,10 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**
      * @notice Initialize Amp, initialize the default partition, and register the
      * contract implementation in the global ERC1820Registry.
-     * @param _swapTokenAddress_ The address of the ERC20 token that is set to be
+     * @param _swapTokenAddress_ The address of the ERC-20 token that is set to be
      * swappable for Amp.
-     * @param _name_ Name of the token.
-     * @param _symbol_ Symbol of the token.
+     * @param _name_ Name of the token to be initialized.
+     * @param _symbol_ Symbol of the token to be initialized.
      */
     constructor(
         address _swapTokenAddress_,
@@ -453,35 +452,34 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************************************************************/
 
     /**
-     * @notice Get the total number of issued tokens.
-     * @return Total supply of tokens currently in circulation.
+     * @notice Retrieves the total number of minted tokens.
+     * @return uint256 containing the total number of minted tokens.
      */
     function totalSupply() external override view returns (uint256) {
         return _totalSupply;
     }
 
     /**
-     * @notice Get the balance of the account with address `_tokenHolder`.
-     * @dev This returns the balance of the holder across all partitions. Note
-     * that due to other functionality in Amp, this figure should not be used
-     * as the arbiter of the amount a token holder will successfully be able to
-     * send via the ERC20 compatible `transfer` method. In order to get that
-     * figure, use `balanceOfByParition` and to get the balance of the default
+     * @notice Retrieves the balance of the account with address `_tokenHolder` across all partitions.
+     * @dev Note that this figure should not be used as the arbiter of the amount a token holder
+     * will successfully be able to send via the ERC-20 compatible `Amp.transfer` method. In order
+     * to get that figure, use `Amp.balanceOfByPartition` to get the balance of the default
      * partition.
      * @param _tokenHolder Address for which the balance is returned.
-     * @return Amount of token held by `_tokenHolder` in the default partition.
+     * @return uint256 containing the amount of tokens held by `_tokenHolder`
+     * across all partitions.
      */
     function balanceOf(address _tokenHolder) external override view returns (uint256) {
         return _balances[_tokenHolder];
     }
 
     /**
-     * @notice Transfer token for a specified address.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * balance of the `msg.sender` address's default partition.
-     * @param _to The address to transfer to.
-     * @param _value The value to be transferred.
-     * @return A boolean that indicates if the operation was successful.
+     * @notice Transfers an amount of tokens to the specified address.
+     * @dev Note that this only transfers from the `msg.sender` address's default partition.
+     * To transfer from other partitions, use function `Amp.transferByPartition`.
+     * @param _to The address to which the tokens should be transferred.
+     * @param _value The amount of tokens to be transferred.
+     * @return bool indicating whether the operation was successful.
      */
     function transfer(address _to, uint256 _value) external override returns (bool) {
         _transferByDefaultPartition(msg.sender, msg.sender, _to, _value, "");
@@ -489,13 +487,13 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Transfer tokens from one address to another.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * balance and allowance of the `_from` address's default partition.
-     * @param _from The address which you want to transfer tokens from.
-     * @param _to The address which you want to transfer to.
+     * @notice Transfers an amount of tokens between two accounts.
+     * @dev Note that this only transfers from the `_from` address's default partition.
+     * To transfer from other partitions, use function `Amp.transferByPartition`.
+     * @param _from The address from which the tokens are to be transferred.
+     * @param _to The address to which the tokens are to be transferred.
      * @param _value The amount of tokens to be transferred.
-     * @return A boolean that indicates if the operation was successful.
+     * @return bool indicating whether the operation was successful.
      */
     function transferFrom(
         address _from,
@@ -507,13 +505,14 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Check the value of tokens that an owner allowed to a spender.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * allowance of the `msg.sender`'s default partition.
-     * @param _owner address The address which owns the funds.
-     * @param _spender address The address which will spend the funds.
-     * @return A uint256 specifying the value of tokens still available for the
-     * spender.
+     * @notice Retrieves the allowance of tokens that has been granted by `_owner` to
+     * `_spender` for the default partition.
+     * @dev Note that this only returns the allowance of the `_owner` address's default partition.
+     * To retrieve the allowance for a different partition, use function `Amp.allowanceByPartition`.
+     * @param _owner The address holding the authorized tokens.
+     * @param _spender The address authorized to transfer the tokens from `_owner`.
+     * @return uint256 specifying the amount of tokens available for the `_spender` to transfer
+     * from the `_owner`'s default partition.
      */
     function allowance(address _owner, address _spender)
         external
@@ -525,13 +524,20 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Approve the passed address to spend the specified amount of
-     * tokens from the default partition on behalf of 'msg.sender'.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * allowance of the `msg.sender`'s default partition.
-     * @param _spender The address which will spend the funds.
-     * @param _value The amount of tokens to be spent.
-     * @return A boolean that indicates if the operation was successful.
+     * @notice Sets an allowance for an address to transfer an amount of tokens on behalf of the
+     * caller.
+     * @dev Note that this only affects the `msg.sender` address's default partition.
+     * To approve transfers from other partitions, use function `Amp.approveByPartition`.
+     * 
+     * This method is required for ERC-20 compatibility, but is subject to the race condition
+     * described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729.
+     * 
+     * Functions `Amp.increaseAllowance` and `Amp.decreaseAllowance` should be used instead.
+     * @param _spender The address which is authorized to transfer tokens from default partition
+     * of `msg.sender`.
+     * @param _value The amount of tokens to be authorized.
+     * @return bool indicating if the operation was successful.
      */
     function approve(address _spender, uint256 _value) external override returns (bool) {
         _approveByPartition(defaultPartition, msg.sender, _spender, _value);
@@ -539,19 +545,21 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Atomically increases the allowance granted to `_spender` by the
-     * for caller.
-     * @dev This is an alternative to {approve} that can be used as a mitigation
-     * problems described in {IERC20-approve}.
-     * Emits an {Approval} event indicating the updated allowance.
-     * Requirements:
+     * @notice Increases the allowance granted to `_spender` by the caller.
+     * @dev This is an alternative to `Amp.approve` that can be used as a mitigation for
+     * the race condition described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729.
+     * 
+     * Note that this only affects the `msg.sender` address's default partition.
+     * To increase the allowance for other partitions, use function
+     * `Amp.increaseAllowanceByPartition`.
+     * 
+     * #### Requirements:
      * - `_spender` cannot be the zero address.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * allowance of the `msg.sender`'s default partition.
-     * @param _spender Operator allowed to transfer the tokens
-     * @param _addedValue Additional amount of the `msg.sender`s tokens `_spender`
-     * is allowed to transfer
-     * @return 'true' is successful, 'false' otherwise
+     * @param _spender The account authorized to transfer the tokens.
+     * @param _addedValue Additional amount of the `msg.sender`'s tokens `_spender`
+     * is allowed to transfer.
+     * @return bool indicating if the operation was successful.
      */
     function increaseAllowance(address _spender, uint256 _addedValue)
         external
@@ -567,21 +575,22 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Atomically decreases the allowance granted to `_spender` by the
-     * caller.
-     * @dev This is an alternative to {approve} that can be used as a mitigation
-     * for bugs caused by reentrancy.
-     * Emits an {Approval} event indicating the updated allowance.
-     * Requirements:
+     * @notice Decreases the allowance granted to `_spender` by the caller.
+     * @dev This is an alternative to `Amp.approve` that can be used as a mitigation for
+     * the race condition described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729.
+     * 
+     * Note that this only affects the `msg.sender` address's default partition.
+     * To decrease the allowance for other partitions, use function
+     * `decreaseAllowanceByPartition`.
+     * 
+     * #### Requirements:
      * - `_spender` cannot be the zero address.
-     * - `_spender` must have allowance for the caller of at least
-     * `_subtractedValue`.
-     * @dev This method is for ERC20 compatibility, and only affects the
-     * allowance of the `msg.sender`'s default partition.
-     * @param _spender Operator allowed to transfer the tokens
-     * @param _subtractedValue Amount of the `msg.sender`s tokens `_spender`
-     * is no longer allowed to transfer
-     * @return 'true' is successful, 'false' otherwise
+     * - `_spender` must have an allowance for the caller of at least `_subtractedValue`.
+     * @param _spender Account whose authorization to transfer tokens is to be decreased.
+     * @param _subtractedValue Amount by which the authorization for `_spender` to transfer tokens
+     * held by `msg.sender`'s account is to be decreased.
+     * @return bool indicating if the operation was successful.
      */
     function decreaseAllowance(address _spender, uint256 _subtractedValue)
         external
@@ -605,10 +614,11 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /******************************** Swap  ***********************************/
 
     /**
-     * @notice Swap tokens to mint AMP.
-     * @dev Requires `_from` to have given allowance of swap token to contract.
-     * Otherwise will throw error code 53 (Insuffient Allowance).
-     * @param _from Token holder to execute the swap for.
+     * @notice Exchanges an amount of source swap tokens from the contract defined at deployment
+     * for the equivalent amount of Amp tokens.
+     * @dev Requires the `_from` account to have granted the Amp contract an allowance of swap
+     * tokens no greater than their balance.
+     * @param _from Token holder whose swap tokens will be exchanged for Amp tokens.
      */
     function swap(address _from) public {
         uint256 amount = swapToken.allowance(_from, address(this));
@@ -628,10 +638,10 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /************************** Holder information ****************************/
 
     /**
-     * @notice Get balance of a tokenholder for a specific partition.
-     * @param _partition Name of the partition.
+     * @notice Retrieves the balance of a token holder for a specific partition.
+     * @param _partition The partition for which the balance is returned.
      * @param _tokenHolder Address for which the balance is returned.
-     * @return Amount of token of partition `_partition` held by `_tokenHolder` in the token contract.
+     * @return uint256 containing the amount of tokens held by `_tokenHolder` in `_partition`.
      */
     function balanceOfByPartition(bytes32 _partition, address _tokenHolder)
         external
@@ -642,9 +652,9 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Get partitions index of a token holder.
-     * @param _tokenHolder Address for which the partitions index are returned.
-     * @return Array of partitions index of '_tokenHolder'.
+     * @notice Retrieves the set of partitions for a particular token holder.
+     * @param _tokenHolder Address for which the partitions are returned.
+     * @return array containing the partitions of `_tokenHolder`.
      */
     function partitionsOf(address _tokenHolder) external view returns (bytes32[] memory) {
         return _partitionsOf[_tokenHolder];
@@ -654,22 +664,24 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /************************** Advanced Transfers ****************************/
 
     /**
-     * @notice Transfer tokens from a specific partition on behalf of a token
-     * holder, optionally changing the parittion and optionally including
-     * arbitrary data with the transfer.
+     * @notice Transfers tokens from a specific partition on behalf of a token
+     * holder, optionally changing the partition and including
+     * arbitrary data used by the partition strategies and collateral managers to authorize the
+     * transfer.
      * @dev This can be used to transfer an address's own tokens, or transfer
-     * a different addresses tokens by specifying the `_from` param. If
+     * a different address's tokens by specifying the `_from` param. If
      * attempting to transfer from a different address than `msg.sender`, the
      * `msg.sender` will need to be an operator or have enough allowance for the
      * `_partition` of the `_from` address.
-     * @param _partition Name of the partition to transfer from.
-     * @param _from Token holder.
-     * @param _to Token recipient.
-     * @param _value Number of tokens to transfer.
+     * @param _partition The partition from which the tokens are to be transferred.
+     * @param _from Address from which the tokens are to be transferred.
+     * @param _to Address to which the tokens are to be transferred.
+     * @param _value Amount of tokens to be transferred.
      * @param _data Information attached to the transfer. Will contain the
-     * destination partition (if changing partitions).
-     * @param _operatorData Information attached to the transfer, by the operator.
-     * @return Destination partition.
+     * destination partition if changing partitions.
+     * @param _operatorData Additional data attached to the transfer. Used by partition strategies
+     * and collateral managers to authorize the transfer.
+     * @return bytes32 containing the destination partition.
      */
     function transferByPartition(
         bytes32 _partition,
@@ -695,11 +707,13 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /************************** Operator Management ***************************/
 
     /**
-     * @notice Set a third party operator address as an operator of 'msg.sender'
-     * to transfer and redeem tokens on its behalf.
-     * @dev The msg.sender is always an operator for itself, and does not need to
+     * @notice Authorizes an address as an operator of `msg.sender` to transfer tokens on its
+     * behalf.
+     * @dev Note that this applies to all partitions.
+     * 
+     * `msg.sender` is always an operator for itself, and does not need to
      * be explicitly added.
-     * @param _operator Address to set as an operator for 'msg.sender'.
+     * @param _operator Address to set as an operator for `msg.sender`.
      */
     function authorizeOperator(address _operator) external {
         require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
@@ -709,11 +723,15 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Remove the right of the operator address to be an operator for
-     * 'msg.sender' and to transfer and redeem tokens on its behalf.
-     * @dev The msg.sender is always an operator for itself, and cannot be
+     * @notice Remove the right of the `_operator` address to be an operator for
+     * `msg.sender` and to transfer tokens on its behalf.
+     * @dev Note that this affects the account-wide authorization granted via function
+     * `Amp.authorizeOperator`, and does not affect authorizations granted via function
+     * `Amp.authorizeOperatorByPartition`.
+     * 
+     * `msg.sender` is always an operator for itself, and cannot be
      * removed.
-     * @param _operator Address to rescind as an operator for 'msg.sender'.
+     * @param _operator Address to be deauthorized an operator for `msg.sender`.
      */
     function revokeOperator(address _operator) external {
         require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
@@ -723,11 +741,11 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Set `_operator` as an operator for 'msg.sender' for a given partition.
-     * @dev The msg.sender is always an operator for itself, and does not need to
+     * @notice Authorizes an account as an operator of a particular partition.
+     * @dev The `msg.sender` is always an operator for itself, and does not need to
      * be explicitly added to a partition.
-     * @param _partition Name of the partition.
-     * @param _operator Address to set as an operator for 'msg.sender'.
+     * @param _partition The partition for which the `_operator` is to be authorized.
+     * @param _operator Address to be authorized as an operator for `msg.sender`.
      */
     function authorizeOperatorByPartition(bytes32 _partition, address _operator)
         external
@@ -739,14 +757,14 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Remove the right of the operator address to be an operator on a
-     * given partition for 'msg.sender' and to transfer and redeem tokens on its
-     * behalf.
-     * @dev The msg.sender is always an operator for itself, and cannot be
+     * @notice Deauthorizes an address as an operator for a particular partition.
+     * @dev Note that this does not override an account-wide authorization granted via function
+     * `Amp.authorizeOperator`.
+     * 
+     * `msg.sender` is always an operator for itself, and cannot be
      * removed from a partition.
-     * @param _partition Name of the partition.
-     * @param _operator Address to rescind as an operator on given partition for
-     * 'msg.sender'.
+     * @param _partition The partition for which the `_operator` is deauthorized.
+     * @param _operator Address to deauthorize as an operator for `msg.sender`.
      */
     function revokeOperatorByPartition(bytes32 _partition, address _operator) external {
         require(_operator != msg.sender, EC_58_INVALID_OPERATOR);
@@ -758,15 +776,13 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************************************************************/
     /************************** Operator Information **************************/
     /**
-     * @notice Indicate whether the `_operator` address is an operator of the
+     * @notice Indicates whether the `_operator` address is an operator of the
      * `_tokenHolder` address.
-     * @dev An operator in this case is an operator across all of the partitions
-     * of the `msg.sender` address.
+     * @dev Note that this applies to all of the partitions of the `msg.sender` address.
      * @param _operator Address which may be an operator of `_tokenHolder`.
      * @param _tokenHolder Address of a token holder which may have the
      * `_operator` address as an operator.
-     * @return 'true' if operator is an operator of 'tokenHolder' and 'false'
-     * otherwise.
+     * @return bool indicating whether `_operator` is an operator of `_tokenHolder`.
      */
     function isOperator(address _operator, address _tokenHolder)
         external
@@ -777,15 +793,14 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Indicate whether the operator address is an operator of the
-     * `_tokenHolder` address for the given partition.
-     * @param _partition Name of the partition.
-     * @param _operator Address which may be an operator of tokenHolder for the
-     * given partition.
+     * @notice Indicate whether the `_operator` address is an operator of the
+     * `_tokenHolder` address for the `_partition`.
+     * @param _partition Partition for which `_operator` may be authorized.
+     * @param _operator Address which may be an operator of `_tokenHolder` for the `_partition`.
      * @param _tokenHolder Address of a token holder which may have the
-     * `_operator` address as an operator for the given partition.
-     * @return 'true' if 'operator' is an operator of `_tokenHolder` for
-     * partition '_partition' and 'false' otherwise.
+     * `_operator` address as an operator for the `_partition`.
+     * @return bool indicating whether `_operator` is an operator of `_tokenHolder` for the
+     * `_partition`.
      */
     function isOperatorForPartition(
         bytes32 _partition,
@@ -796,17 +811,18 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Indicate when the `_operator` address is an operator of the
-     * `_collateralManager` address for the given partition.
-     * @dev This method is the same as `isOperatorForPartition`, except that it
-     * also requires the address that `_operator` is being checked for MUST be
-     * a registered collateral manager, and this method will not execute
-     * partition strategy operator check hooks.
-     * @param _partition Name of the partition.
+     * @notice Indicates whether the `_operator` address is an operator of the
+     * `_collateralManager` address for the `_partition`.
+     * @dev This method is functionally identical to `Amp.isOperatorForPartition`, except that it
+     * also requires the address that `_operator` is being checked for must be
+     * a registered collateral manager.
+     * @param _partition Partition for which the operator may be authorized.
      * @param _operator Address which may be an operator of `_collateralManager`
-     * for the given partition.
+     * for the `_partition`.
      * @param _collateralManager Address of a collateral manager which may have
-     * the `_operator` address as an operator for the given partition.
+     * the `_operator` address as an operator for the `_partition`.
+     * @return bool indicating whether the `_operator` address is an operator of the
+     * `_collateralManager` address for the `_partition`.
      */
     function isOperatorForCollateralManager(
         bytes32 _partition,
@@ -822,42 +838,40 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************************************************************/
     /***************************** Token metadata *****************************/
     /**
-     * @notice Get the name of the token (Amp).
-     * @return Name of the token.
+     * @notice Retrieves the name of the token.
+     * @return string containing the name of the token. Always "Amp".
      */
     function name() external view returns (string memory) {
         return _name;
     }
 
     /**
-     * @notice Get the symbol of the token (AMP).
-     * @return Symbol of the token.
+     * @notice Retrieves the symbol of the token.
+     * @return string containing the symbol of the token. Always "AMP".
      */
     function symbol() external view returns (string memory) {
         return _symbol;
     }
 
     /**
-     * @notice Get the number of decimals of the token.
-     * @dev Hard coded to 18.
-     * @return The number of decimals of the token (18).
+     * @notice Retrieves the number of decimals of the token.
+     * @return uint8 containing the number of decimals of the token. Always 18.
      */
     function decimals() external pure returns (uint8) {
         return uint8(18);
     }
 
     /**
-     * @notice Get the smallest part of the token that’s not divisible.
-     * @dev Hard coded to 1.
-     * @return The smallest non-divisible part of the token.
+     * @notice Retrieves the smallest part of the token that is not divisible.
+     * @return uint256 containing the smallest non-divisible part of the token. Always 1.
      */
     function granularity() external pure returns (uint256) {
         return _granularity;
     }
 
     /**
-     * @notice Get list of existing partitions.
-     * @return Array of all exisiting partitions.
+     * @notice Retrieves the set of existing partitions.
+     * @return array containing all partitions.
      */
     function totalPartitions() external view returns (bytes32[] memory) {
         return _totalPartitions;
@@ -866,11 +880,13 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /************************************************************************************************/
     /******************************** Partition Token Allowances ************************************/
     /**
-     * @notice Check the value of tokens that an owner allowed to a spender.
-     * @param _partition Name of the partition.
+     * @notice Retrieves the allowance of tokens that has been granted by a token holder to another
+     * account.
+     * @param _partition Partition for which the spender may be authorized.
      * @param _owner The address which owns the tokens.
-     * @param _spender The address which will spend the tokens.
-     * @return The value of tokens still for the spender to transfer.
+     * @param _spender The address which is authorized transfer tokens on behalf of the token
+     * holder.
+     * @return uint256 containing the amount of tokens available for `_spender` to transfer.
      */
     function allowanceByPartition(
         bytes32 _partition,
@@ -881,12 +897,17 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Approve the `_spender` address to spend the specified amount of
-     * tokens in `_partition` on behalf of 'msg.sender'.
-     * @param _partition Name of the partition.
-     * @param _spender The address which will spend the tokens.
-     * @param _value The amount of tokens to be tokens.
-     * @return A boolean that indicates if the operation was successful.
+     * @notice Approves the `_spender` address to transfer the specified amount of
+     * tokens in `_partition` on behalf of `msg.sender`.
+     * 
+     * Note that this method is subject to the race condition described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729. Functions
+     * `Amp.increaseAllowanceByPartition` and `Amp.decreaseAllowanceByPartition` should be used
+     * instead.
+     * @param _partition Partition for which the `_spender` is to be authorized to transfer tokens.
+     * @param _spender The address of the account to be authorized to transfer tokens.
+     * @param _value The amount of tokens to be authorized.
+     * @return bool indicating if the operation was successful.
      */
     function approveByPartition(
         bytes32 _partition,
@@ -898,18 +919,18 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Atomically increases the allowance granted to `_spender` by the
-     * caller.
-     * @dev This is an alternative to {approveByPartition} that can be used as
-     * a mitigation for bugs caused by reentrancy.
-     * Emits an {ApprovalByPartition} event indicating the updated allowance.
-     * Requirements:
+     * @notice Increases the allowance granted to an account by the caller for a partition.
+     * @dev This is an alternative to function `Amp.approveByPartition` that can be used as
+     * a mitigation for the race condition described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     * 
+     * #### Requirements:
      * - `_spender` cannot be the zero address.
-     * @param _partition Name of the partition.
-     * @param _spender Operator allowed to transfer the tokens
-     * @param _addedValue Additional amount of the `msg.sender`s tokens `_spender`
-     * is allowed to transfer
-     * @return 'true' is successful, 'false' otherwise
+     * @param _partition Partition for which the `_spender` is to be authorized to transfer tokens.
+     * @param _spender The address of the account to be authorized to transfer tokens.
+     * @param _addedValue Additional amount of the `msg.sender`'s tokens `_spender`
+     * is allowed to transfer.
+     * @return bool indicating if the operation was successful.
      */
     function increaseAllowanceByPartition(
         bytes32 _partition,
@@ -926,26 +947,28 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Atomically decreases the allowance granted to `_spender` by the
+     * @notice Decreases the allowance granted to `_spender` by the
      * caller.
-     * @dev This is an alternative to {approveByPartition} that can be used as
-     * a mitigation for bugs caused by reentrancy.
-     * Emits an {ApprovalByPartition} event indicating the updated allowance.
-     * Requirements:
+     * @dev This is an alternative to function `Amp.approveByPartition` that can be used as
+     * a mitigation for the race condition described in
+     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729
+     * 
+     * #### Requirements:
      * - `_spender` cannot be the zero address.
      * - `_spender` must have allowance for the caller of at least
      * `_subtractedValue`.
-     * @param _spender Operator allowed to transfer the tokens
-     * @param _subtractedValue Amount of the `msg.sender`s tokens `_spender` is
-     * no longer allowed to transfer
-     * @return 'true' is successful, 'false' otherwise
+     * @param _partition Partition for which `_spender`'s allowance is to be decreased.
+     * @param _spender Amount by which the authorization for `_spender` to transfer tokens
+     * held by `msg.sender`'s account is to be decreased.
+     * @param _subtractedValue Amount of the `msg.sender`'s tokens `_spender` is
+     * no longer allowed to transfer.
+     * @return bool indicating if the operation was successful.
      */
     function decreaseAllowanceByPartition(
         bytes32 _partition,
         address _spender,
         uint256 _subtractedValue
     ) external returns (bool) {
-        // TOOD: Figure out if safe math will panic below 0
         _approveByPartition(
             _partition,
             msg.sender,
@@ -959,8 +982,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /************************ Collateral Manager Admin ************************/
 
     /**
-     * @notice Allow a collateral manager to self-register.
-     * @dev Error 0x5c.
+     * @notice Registers `msg.sender` as a collateral manager.
      */
     function registerCollateralManager() external {
         // Short circuit a double registry
@@ -973,10 +995,9 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Get the status of a collateral manager.
-     * @param _collateralManager The address of the collateral mananger in question.
-     * @return 'true' if `_collateralManager` has self registered, 'false'
-     * otherwise.
+     * @notice Retrieves whether the supplied address is a collateral manager.
+     * @param _collateralManager The address of the collateral manager.
+     * @return bool indicating whether `_collateralManager` is registered as a collateral manager.
      */
     function isCollateralManager(address _collateralManager)
         external
@@ -989,9 +1010,8 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************************************************************/
     /************************ Partition Strategy Admin ************************/
     /**
-     * @notice Sets an implementation for a partition strategy identified by prefix.
-     * @dev This is an administration method, callable only by the owner of the
-     * Amp contract.
+     * @notice Sets an implementation for a partition strategy identified by `_prefix`.
+     * @dev Note: this function can only be called by the contract owner.
      * @param _prefix The 4 byte partition prefix the strategy applies to.
      * @param _implementation The address of the implementation of the strategy hooks.
      */
@@ -1010,10 +1030,9 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @notice Return if a partition strategy has been reserved and has an
-     * implementation registered.
+     * @notice Return whether the `_prefix` has had a partition strategy registered.
      * @param _prefix The partition strategy identifier.
-     * @return 'true' if the strategy has been registered, 'false' if not.
+     * @return bool indicating if the strategy has been registered.
      */
     function isPartitionStrategy(bytes4 _prefix) external view returns (bool) {
         return _isPartitionStrategy[_prefix];
@@ -1037,7 +1056,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
      * partition if a partition change is requested.
      * @param _operatorData Information attached to the transfer, by the operator
      * (if any).
-     * @return Destination partition.
+     * @return bytes32 containing the destination partition.
      */
     function _transferByPartition(
         bytes32 _fromPartition,
@@ -1124,7 +1143,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
 
     /**
      * @notice Transfer tokens from default partitions.
-     * @dev Used as a helper method for ERC20 compatibility.
+     * @dev Used as a helper method for ERC-20 compatibility.
      * @param _operator The address performing the transfer.
      * @param _from Token holder.
      * @param _to Token recipient.
@@ -1255,9 +1274,9 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /**************************************************************************/
     /********************************* Hooks **********************************/
     /**
-     * @notice Check for and call the 'AmpTokensSender' hook on the sender address
+     * @notice Check for and call the `AmpTokensSender` hook on the sender address
      * (`_from`), and, if `_fromPartition` is within the scope of a strategy,
-     * check for and call the 'AmpPartitionStrategy.tokensFromPartitionToTransfer'
+     * check for and call the `AmpPartitionStrategy.tokensFromPartitionToTransfer`
      * hook for the strategy.
      * @param _fromPartition Name of the partition to transfer tokens from.
      * @param _operator Address which triggered the balance decrease (through
@@ -1318,7 +1337,7 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     }
 
     /**
-     * @dev Check for 'AmpTokensRecipient' hook on the recipient and call it.
+     * @dev Check for `AmpTokensRecipient` hook on the recipient and call it.
      * @param _toPartition Name of the partition the tokens were transferred to.
      * @param _operator Address which triggered the balance increase (through
      * transfer or mint).
@@ -1382,11 +1401,11 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
     /******************************* Allowance ********************************/
     /**
      * @notice Approve the `_spender` address to spend the specified amount of
-     * tokens in `_partition` on behalf of 'msg.sender'.
+     * tokens in `_partition` on behalf of `msg.sender`.
      * @param _partition Name of the partition.
      * @param _tokenHolder Owner of the tokens.
-     * @param _spender The address which will spend the tokens.
-     * @param _amount The amount of tokens to be tokens.
+     * @param _spender The address which may spend the tokens.
+     * @param _amount The amount of tokens available to be spent.
      */
     function _approveByPartition(
         bytes32 _partition,
@@ -1411,11 +1430,10 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
      * @dev Indicate whether the operator address is an operator of the
      * tokenHolder address. An operator in this case is an operator across all
      * partitions of the `msg.sender` address.
-     * @param _operator Address which may be an operator of '_tokenHolder'.
-     * @param _tokenHolder Address of a token holder which may have the '_operator'
+     * @param _operator Address which may be an operator of `_tokenHolder`.
+     * @param _tokenHolder Address of a token holder which may have the `_operator`
      * address as an operator.
-     * @return 'true' if `_operator` is an operator of `_tokenHolder` and 'false'
-     * otherwise.
+     * @return bool indicating whether `_operator` is an operator of `_tokenHolder`
      */
     function _isOperator(address _operator, address _tokenHolder)
         internal
@@ -1431,11 +1449,11 @@ contract Amp is IERC20, ERC1820Client, ERC1820Implementer, ErrorCodes, Ownable {
      * tokenHolder address for the given partition.
      * @param _partition Name of the partition.
      * @param _operator Address which may be an operator of tokenHolder for the
-     * given partition.
+     * `_partition`.
      * @param _tokenHolder Address of a token holder which may have the operator
-     * address as an operator for the given partition.
-     * @return 'true' if 'operator' is an operator of 'tokenHolder' for partition
-     * `_partition` and 'false' otherwise.
+     * address as an operator for the `_partition`.
+     * @return bool indicating whether `_operator` is an operator of `_tokenHolder` for the
+     * `_partition`.
      */
     function _isOperatorForPartition(
         bytes32 _partition,
