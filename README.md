@@ -6,7 +6,7 @@ For more information about Amp, see https://amptoken.org.
 
 # Audits
 
-- ConsenSys Diligence - June 2020
+- [ConsenSys Diligence](https://diligence.consensys.net/audits/2020/06/amp/) - June 2020
 - [Trail of Bits](https://github.com/trailofbits/publications/blob/master/reviews/amp.pdf) - July and August 2020
 
 # Contract Addresses
